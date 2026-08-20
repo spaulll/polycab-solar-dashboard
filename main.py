@@ -1,0 +1,260 @@
+"""
+Solar Dashboard backend.
+
+Run with (serves the frontend and backend together):
+    python main.py
+
+or equivalently:
+    uvicorn main:app --host 0.0.0.0 --port 8000
+
+This starts:
+- A background asyncio task that polls the inverter over Modbus TCP,
+  respects sunrise/sunset night mode, writes readings to SQLite, and
+  broadcasts each reading to connected WebSocket clients.
+- REST endpoints for historical queries, daily summaries, and CSV export.
+- A WebSocket endpoint at /ws for live updates.
+
+Local-network-only tool: no auth, no HTTPS, CORS wide open by design.
+"""
+import asyncio
+import datetime
+import json
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+
+import config
+import database
+import inverter
+
+
+# ---------------------------------------------------------------------------
+# WebSocket connection manager
+# ---------------------------------------------------------------------------
+class ConnectionManager:
+    def __init__(self):
+        self.active: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active:
+            self.active.remove(ws)
+
+    async def broadcast(self, message: dict):
+        dead = []
+        for ws in self.active:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+
+manager = ConnectionManager()
+
+# Latest known state, so newly-connecting clients get something immediately
+# instead of waiting up to POLL_DELAY seconds for the next tick.
+latest_state: dict = {
+    "type": "status",
+    "night_mode": False,
+    "last_reading": None,
+    "last_error": None,
+}
+
+
+# ---------------------------------------------------------------------------
+# Background polling loop
+# ---------------------------------------------------------------------------
+async def polling_loop():
+    while True:
+        seconds_until_sunrise = await asyncio.to_thread(inverter.get_seconds_until_sunrise)
+
+        if seconds_until_sunrise > 0:
+            latest_state["type"] = "status"
+            latest_state["night_mode"] = True
+            latest_state["last_error"] = None
+            await manager.broadcast({
+                "type": "night_mode",
+                "night_mode": True,
+                "seconds_until_sunrise": seconds_until_sunrise,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            })
+            # Close the persistent Modbus connection before a long idle stretch --
+            # leaving a socket open for hours risks it going stale, and the
+            # inverter itself is asleep anyway. fetch_inverter_data() will
+            # transparently reconnect on the first poll after sunrise.
+            await asyncio.to_thread(inverter.close_client)
+            # Sleep in short increments so we can still react (e.g. if the process
+            # needs to shut down) rather than one giant blocking sleep.
+            remaining = seconds_until_sunrise
+            chunk = 60.0
+            while remaining > 0:
+                await asyncio.sleep(min(chunk, remaining))
+                remaining -= chunk
+            latest_state["night_mode"] = False
+            await manager.broadcast({
+                "type": "wake_up",
+                "night_mode": False,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            })
+            continue
+
+        # --- Day mode: poll the inverter ---
+        try:
+            data = await asyncio.to_thread(inverter.fetch_inverter_data)
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            reading = {**data, "timestamp": now_iso}
+
+            database.enqueue_reading(reading)
+
+            latest_state["night_mode"] = False
+            latest_state["last_reading"] = reading
+            latest_state["last_error"] = None
+
+            await manager.broadcast({
+                "type": "reading",
+                "night_mode": False,
+                "data": reading,
+            })
+
+        except Exception as e:
+            err_msg = str(e)
+            now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            print(f"[{now_iso}] Read Error: {err_msg}")
+            latest_state["last_error"] = err_msg
+            await manager.broadcast({
+                "type": "error",
+                "message": err_msg,
+                "timestamp": now_iso,
+            })
+            await asyncio.sleep(config.ERROR_RETRY_DELAY)
+            continue
+
+        await asyncio.sleep(config.POLL_DELAY)
+
+
+# ---------------------------------------------------------------------------
+# App lifecycle
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    database.init_db()
+    database.start_writer_thread()
+    task = asyncio.create_task(polling_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await asyncio.to_thread(inverter.close_client)
+        database.stop_writer_thread()
+
+
+app = FastAPI(title="Solar Dashboard", lifespan=lifespan)
+
+# Wide-open CORS: local-network tool, no auth/hardening by design.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------------------
+# WebSocket endpoint
+# ---------------------------------------------------------------------------
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        # Send current state immediately on connect
+        sun_info = await asyncio.to_thread(inverter.get_sun_info)
+        await websocket.send_json({
+            "type": "init",
+            "night_mode": latest_state["night_mode"],
+            "last_reading": latest_state["last_reading"],
+            "last_error": latest_state["last_error"],
+            "sun": sun_info,
+        })
+        while True:
+            # We don't expect incoming messages, but keep the connection alive
+            # and detect disconnects promptly.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
+
+
+# ---------------------------------------------------------------------------
+# REST endpoints
+# ---------------------------------------------------------------------------
+@app.get("/api/history")
+async def api_history(range: str = Query("24h", description="1h | 24h | 7d | all")):
+    try:
+        rows = await asyncio.to_thread(database.get_history, range)
+    except ValueError as e:
+        return {"error": str(e)}
+    return {"range": range, "count": len(rows), "readings": rows}
+
+
+@app.get("/api/daily-summary")
+async def api_daily_summary():
+    rows = await asyncio.to_thread(database.get_daily_summary)
+    return {"days": rows}
+
+
+@app.get("/api/export")
+async def api_export(range: str = Query("all", description="1h | 24h | 7d | all")):
+    try:
+        csv_text = await asyncio.to_thread(database.export_csv, range)
+    except ValueError as e:
+        return {"error": str(e)}
+    filename = f"solar_export_{range}.csv"
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.get("/api/status")
+async def api_status():
+    sun_info = await asyncio.to_thread(inverter.get_sun_info)
+    return {
+        "night_mode": latest_state["night_mode"],
+        "last_reading": latest_state["last_reading"],
+        "last_error": latest_state["last_error"],
+        "connected_clients": len(manager.active),
+        "sun": sun_info,
+    }
+
+
+@app.get("/api/sun")
+async def api_sun():
+    """Next sunrise/sunset times and countdowns for the configured location."""
+    return await asyncio.to_thread(inverter.get_sun_info)
+
+
+# ---------------------------------------------------------------------------
+# Serve the frontend
+# ---------------------------------------------------------------------------
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host=config.HOST, port=config.PORT)

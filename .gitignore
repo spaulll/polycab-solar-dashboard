@@ -1,0 +1,6 @@
+.env
+venv/
+.venv/
+solar_data.db
+__pycache__/
+*.pyc
