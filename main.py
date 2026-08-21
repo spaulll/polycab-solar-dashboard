@@ -148,6 +148,9 @@ async def polling_loop():
 async def lifespan(app: FastAPI):
     database.init_db()
     database.start_writer_thread()
+    # Daily maintenance (downsampling + retention + weekly VACUUM) runs on its
+    # own daemon thread so it can never block the async polling loop.
+    database.start_maintenance_thread()
     task = asyncio.create_task(polling_loop())
     try:
         yield
@@ -159,6 +162,8 @@ async def lifespan(app: FastAPI):
             pass
         await asyncio.to_thread(inverter.close_client)
         database.stop_writer_thread()
+        # join() blocks briefly -- keep it off the event loop.
+        await asyncio.to_thread(database.stop_maintenance_thread)
 
 
 app = FastAPI(title="Solar Dashboard", lifespan=lifespan)
@@ -215,6 +220,12 @@ async def api_history(range: str = Query("24h", description="1h | 24h | 7d | all
 async def api_daily_summary():
     rows = await asyncio.to_thread(database.get_daily_summary)
     return {"days": rows}
+
+
+@app.get("/api/db-status")
+async def api_db_status():
+    """Database health: file size, row counts, last maintenance, retention."""
+    return await asyncio.to_thread(database.get_db_status)
 
 
 @app.get("/api/export")

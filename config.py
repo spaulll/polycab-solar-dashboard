@@ -28,6 +28,10 @@ def _env_int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    return os.environ.get(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+
 # --- Modbus / Inverter connection ---
 INVERTER_IP: str = os.environ.get("INVERTER_IP", "192.168.1.100")
 MODBUS_PORT: int = _env_int("MODBUS_PORT", 502)
@@ -44,6 +48,16 @@ ERROR_RETRY_DELAY: float = _env_float("ERROR_RETRY_DELAY", 5.0)  # seconds to wa
 
 # --- Storage ---
 DB_PATH: str = os.environ.get("DB_PATH", "solar_data.db")
+
+# --- Long-term data management ---
+# Full-resolution readings older than this (in days) are downsampled into
+# hourly/daily aggregate tables and then deleted from `readings`.
+RETENTION_DAYS: int = _env_int("RETENTION_DAYS", 60)
+# Local hour of day when the daily maintenance task runs (aggregation,
+# retention cleanup, weekly VACUUM).
+MAINTENANCE_HOUR: int = _env_int("MAINTENANCE_HOUR", 3)
+# Whether the weekly VACUUM/ANALYZE pass is allowed to run.
+ENABLE_VACUUM: bool = _env_bool("ENABLE_VACUUM", True)
 
 # --- Location (for sunrise/sunset night-mode logic) ---
 # NOTE: set these to YOUR location for accurate sunrise/sunset timing.
