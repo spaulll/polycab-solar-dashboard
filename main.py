@@ -67,7 +67,20 @@ latest_state: dict = {
     "night_mode": False,
     "last_reading": None,
     "last_error": None,
+    "status": "online",                 # online | offline | night
+    "offline_since": None,              # ISO UTC timestamp or None
+    "last_successful_reading_at": None,
 }
+
+
+def status_snapshot() -> dict:
+    """The inverter-health fields shared by /api/status and WS messages."""
+    return {
+        "status": latest_state["status"],
+        "offline_since": latest_state["offline_since"],
+        "last_error": latest_state["last_error"],
+        "last_successful_reading_at": latest_state["last_successful_reading_at"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +94,16 @@ async def polling_loop():
             latest_state["type"] = "status"
             latest_state["night_mode"] = True
             latest_state["last_error"] = None
+            # Night mode supersedes the offline display; any open powercut row
+            # stays open in the DB and is closed by the first post-sunrise read.
+            latest_state["status"] = "night"
+            latest_state["offline_since"] = None
             await manager.broadcast({
                 "type": "night_mode",
                 "night_mode": True,
                 "seconds_until_sunrise": seconds_until_sunrise,
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                **status_snapshot(),
             })
             # Close the persistent Modbus connection before a long idle stretch --
             # leaving a socket open for hours risks it going stale, and the
@@ -100,10 +118,14 @@ async def polling_loop():
                 await asyncio.sleep(min(chunk, remaining))
                 remaining -= chunk
             latest_state["night_mode"] = False
+            if latest_state["status"] == "night":
+                # Optimistic: the next poll (seconds away) confirms or corrects.
+                latest_state["status"] = "online"
             await manager.broadcast({
                 "type": "wake_up",
                 "night_mode": False,
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                **status_snapshot(),
             })
             continue
 
@@ -115,25 +137,40 @@ async def polling_loop():
 
             database.enqueue_reading(reading)
 
+            # Successful reading after errors -> close any open powercut row.
+            database.close_open_powercut()
+
             latest_state["night_mode"] = False
             latest_state["last_reading"] = reading
             latest_state["last_error"] = None
+            latest_state["status"] = "online"
+            latest_state["offline_since"] = None
+            latest_state["last_successful_reading_at"] = now_iso
 
             await manager.broadcast({
                 "type": "reading",
                 "night_mode": False,
                 "data": reading,
+                **status_snapshot(),
             })
 
         except Exception as e:
             err_msg = str(e)
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
             print(f"[{now_iso}] Read Error: {err_msg}")
+            # First error after a successful reading -> open a powercut row.
+            # Errors while already offline, or during night mode, don't create
+            # new rows (record_powercut_start is idempotent as a safety net).
+            if latest_state["status"] != "offline":
+                database.record_powercut_start(err_msg)
+                latest_state["offline_since"] = now_iso
+            latest_state["status"] = "offline"
             latest_state["last_error"] = err_msg
             await manager.broadcast({
                 "type": "error",
                 "message": err_msg,
                 "timestamp": now_iso,
+                **status_snapshot(),
             })
             await asyncio.sleep(config.ERROR_RETRY_DELAY)
             continue
@@ -148,6 +185,14 @@ async def polling_loop():
 async def lifespan(app: FastAPI):
     database.init_db()
     database.start_writer_thread()
+    # If the previous run died mid-powercut (e.g. the host lost power), the
+    # open row tells us we were offline; keep that state until a successful
+    # reading closes it.
+    open_cut = database.get_open_powercut()
+    if open_cut:
+        latest_state["status"] = "offline"
+        latest_state["offline_since"] = open_cut["started_at"]
+        latest_state["last_error"] = open_cut["last_error"]
     # Daily maintenance (downsampling + retention + weekly VACUUM) runs on its
     # own daemon thread so it can never block the async polling loop.
     database.start_maintenance_thread()
@@ -193,6 +238,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "last_reading": latest_state["last_reading"],
             "last_error": latest_state["last_error"],
             "sun": sun_info,
+            **status_snapshot(),
         })
         while True:
             # We don't expect incoming messages, but keep the connection alive
@@ -249,9 +295,22 @@ async def api_status():
         "night_mode": latest_state["night_mode"],
         "last_reading": latest_state["last_reading"],
         "last_error": latest_state["last_error"],
+        **status_snapshot(),
         "connected_clients": len(manager.active),
         "sun": sun_info,
     }
+
+
+@app.get("/api/powercuts")
+async def api_powercuts(
+    range: str = Query("lifetime", description="today | 7d | 30d | lifetime"),
+):
+    """Number of powercut events in the requested window."""
+    try:
+        count = await asyncio.to_thread(database.get_powercut_count, range)
+    except ValueError as e:
+        return {"error": str(e)}
+    return {"range": range, "count": count}
 
 
 @app.get("/api/sun")

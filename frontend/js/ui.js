@@ -10,6 +10,8 @@ const connDot = el('connDot'), connText = el('connText');
 const modeDot = el('modeDot'), modeText = el('modeText');
 const nightBanner = el('nightBanner'), nightText = el('nightText');
 const lastUpdated = el('lastUpdated');
+const invStatusEl = el('invStatus'), invOfflineTimer = el('invOfflineTimer');
+const invLastReading = el('invLastReading'), invLastError = el('invLastError');
 
 function setConn(state){ // 'live' | 'down'
   connDot.className = 'dot ' + (state === 'live' ? 'live' : 'down');
@@ -51,6 +53,56 @@ function setLastUpdated(iso){
   lastUpdated.textContent = fmtTime(iso);
 }
 
+// ---------- Inverter status card ----------
+const INV_STATUS_LABELS = { online: 'Online', offline: 'Unreachable', night: 'Night mode' };
+
+let offlineSinceMs = null;
+let offlineTicker = null;
+
+function fmtDuration(totalSec){
+  totalSec = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+}
+
+function stopOfflineTicker(){
+  if(offlineTicker){ clearInterval(offlineTicker); offlineTicker = null; }
+  offlineSinceMs = null;
+  invOfflineTimer.style.display = 'none';
+}
+
+function tickOfflineTimer(){
+  if(offlineSinceMs === null) return;
+  invOfflineTimer.textContent = 'Offline for ' + fmtDuration((Date.now() - offlineSinceMs) / 1000);
+}
+
+/**
+ * Render inverter health. `info` fields are applied only when present so
+ * partial updates (e.g. a bare night_mode message) don't wipe known values.
+ * status: 'online' | 'offline' | 'night'
+ */
+function setInverterStatus(status, info = {}){
+  invStatusEl.textContent = INV_STATUS_LABELS[status] || '—';
+  invStatusEl.className = 'inv-status-value ' + (status || '');
+
+  if(info.last_reading_at != null) invLastReading.textContent = fmtTime(info.last_reading_at);
+  if(info.last_error !== undefined) invLastError.textContent = info.last_error || 'none';
+
+  if(status === 'offline' && info.offline_since){
+    const parsed = Date.parse(info.offline_since);
+    if(!isNaN(parsed)){
+      offlineSinceMs = parsed;
+      invOfflineTimer.style.display = 'block';
+      tickOfflineTimer();
+      if(!offlineTicker) offlineTicker = setInterval(tickOfflineTimer, 1000);
+      return;
+    }
+  }
+  stopOfflineTicker();
+}
+
 export {
   setConn,
   setConnText,
@@ -60,4 +112,5 @@ export {
   updateStatCards,
   dimStatCards,
   setLastUpdated,
+  setInverterStatus,
 };

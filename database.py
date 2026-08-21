@@ -85,6 +85,21 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Powercut events: one row per inverter-unreachable episode. The row is
+-- inserted when the first error follows a successful reading and updated
+-- (ended_at + duration) when a reading succeeds again. An open row
+-- (ended_at IS NULL) means the inverter is currently unreachable -- this is
+-- how offline state survives app/server restarts.
+CREATE TABLE IF NOT EXISTS powercuts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,          -- ISO 8601 UTC, when it went unreachable
+    ended_at TEXT,                     -- ISO 8601 UTC, NULL while ongoing
+    duration_seconds INTEGER,          -- filled in on recovery
+    last_error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_powercuts_started ON powercuts (started_at);
 """
 
 # Ranges served straight from the full-resolution table.
@@ -139,6 +154,102 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, str(value)),
     )
+
+
+# ---------------------------------------------------------------------------
+# Powercut tracking
+# ---------------------------------------------------------------------------
+def get_open_powercut() -> Optional[dict]:
+    """The currently-open powercut row (ended_at IS NULL), or None."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT * FROM powercuts WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def record_powercut_start(last_error: str) -> None:
+    """
+    Mark the start of an unreachable episode. Idempotent: if a row is already
+    open (e.g. errors across night-mode transitions) it is left untouched.
+    Also bumps the quick-access lifetime counter in meta.
+    """
+    conn = _connect()
+    try:
+        if conn.execute(
+            "SELECT id FROM powercuts WHERE ended_at IS NULL LIMIT 1"
+        ).fetchone():
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO powercuts (started_at, ended_at, duration_seconds, last_error) "
+            "VALUES (?, NULL, NULL, ?)",
+            (now, last_error),
+        )
+        total = int(_get_meta(conn, "total_powercuts") or 0) + 1
+        _set_meta(conn, "total_powercuts", total)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def close_open_powercut() -> None:
+    """Stamp ended_at + duration on the open powercut row, if any. No-op otherwise."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, started_at FROM powercuts WHERE ended_at IS NULL "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return
+        ended = datetime.now(timezone.utc)
+        started = datetime.fromisoformat(row["started_at"])
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        duration = max(0, int((ended - started).total_seconds()))
+        conn.execute(
+            "UPDATE powercuts SET ended_at = ?, duration_seconds = ? WHERE id = ?",
+            (ended.isoformat(), duration, row["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_powercut_count(range_str: str = "lifetime") -> int:
+    """Count powercuts in 'today' | '7d' | '30d' | 'lifetime' window."""
+    conn = _connect()
+    try:
+        if range_str == "lifetime":
+            return conn.execute("SELECT COUNT(*) AS n FROM powercuts").fetchone()["n"]
+
+        now = datetime.now(timezone.utc)
+        if range_str == "today":
+            # Local calendar day, converted to UTC so string comparison against
+            # stored UTC timestamps stays correct.
+            local_midnight = (
+                datetime.now(_local_tz())
+                .replace(hour=0, minute=0, second=0, microsecond=0)
+                .astimezone(timezone.utc)
+            )
+            cutoff = local_midnight.isoformat()
+        elif range_str == "7d":
+            cutoff = (now - timedelta(days=7)).isoformat()
+        elif range_str == "30d":
+            cutoff = (now - timedelta(days=30)).isoformat()
+        else:
+            raise ValueError(
+                f"Unknown range '{range_str}'. Use one of: today, 7d, 30d, lifetime."
+            )
+        return conn.execute(
+            "SELECT COUNT(*) AS n FROM powercuts WHERE started_at >= ?", (cutoff,)
+        ).fetchone()["n"]
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +710,7 @@ def get_db_status() -> dict:
             ).fetchone()["n"]
         last_maintenance = _get_meta(conn, "last_maintenance")
         last_vacuum = _get_meta(conn, "last_vacuum")
+        total_powercuts = int(_get_meta(conn, "total_powercuts") or 0)
     finally:
         conn.close()
 
@@ -611,6 +723,7 @@ def get_db_status() -> dict:
         "row_counts": counts,
         "last_maintenance": last_maintenance,
         "last_vacuum": last_vacuum,
+        "total_powercuts": total_powercuts,
         "retention_days": config.RETENTION_DAYS,
         "maintenance_hour": config.MAINTENANCE_HOUR,
         "vacuum_enabled": config.ENABLE_VACUUM,

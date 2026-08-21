@@ -24,8 +24,12 @@ function fetchSunInfo(){
   return getJSON('/api/sun');
 }
 
+function fetchPowercutCount(range){
+  return getJSON(`/api/powercuts?range=${range}`).then(json => json.count ?? 0);
+}
+
 function csvExportURL(range){
   return `${API_BASE}/api/export?range=${range}`;
 }
 
-export { fetchHistory, fetchDailySummary, fetchStatus, fetchSunInfo, csvExportURL };
+export { fetchHistory, fetchDailySummary, fetchStatus, fetchSunInfo, fetchPowercutCount, csvExportURL };

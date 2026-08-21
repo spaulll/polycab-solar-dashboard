@@ -109,6 +109,31 @@
     </div>
 
     <div>
+      <!-- Inverter status -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Inverter Status</div>
+        </div>
+        <div class="inv-status-value" id="invStatus">—</div>
+        <div class="inv-offline-timer" id="invOfflineTimer"></div>
+        <div class="inv-meta">
+          <div><span class="inv-meta-label">Last reading</span><span id="invLastReading">–</span></div>
+          <div><span class="inv-meta-label">Last error</span><span id="invLastError">–</span></div>
+        </div>
+        <div class="pc-block">
+          <div class="pc-head">
+            <span class="insight-label" style="margin-bottom:0;">Powercuts</span>
+            <select id="pcRange">
+              <option value="today" selected>Today</option>
+              <option value="7d">7 days</option>
+              <option value="30d">30 days</option>
+              <option value="lifetime">Lifetime</option>
+            </select>
+          </div>
+          <div class="pc-count" id="pcCount">–</div>
+        </div>
+      </div>
+
       <!-- Insights -->
       <div class="panel">
         <div class="panel-head">
