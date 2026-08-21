@@ -147,8 +147,15 @@ directory (path controlled by `DB_PATH`). The schema is created via
 - **Every reading** is hashed off to a background thread (`database.py`) via a
   `queue.Queue`, so SQLite writes never block the polling loop.
 - **WebSocket clients** (`/ws`) get every new reading pushed immediately, plus
-  an `init` message on connect with the latest known state so the UI isn't
-  blank while waiting for the next tick.
+  an `init` message on connect with the latest known state (including inverter
+  health) so the UI isn't blank while waiting for the next tick.
+- **Powercut tracking**: the first Modbus error after a successful reading
+  opens a row in the `powercuts` table; the next successful reading closes it
+  with a computed duration. Errors during night mode are ignored, and an open
+  row survives app/host restarts — so offline episodes are recorded even when
+  the dashboard machine itself loses power. The Inverter Status card shows the
+  live state (Online / Unreachable + offline timer / Night mode) and a
+  powercut count per selected range.
 - **Historical/aggregate/CSV endpoints** query SQLite directly and are safe to
   call anytime, independent of the live polling loop.
 
@@ -159,15 +166,17 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history?range=1h\|24h\|7d\|all` | Raw readings in the given range |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day (for the bar chart) |
 | `GET /api/export?range=...` | CSV download of the given range |
-| `GET /api/status` | Current night-mode state, last reading, last error, sun info |
+| `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
+| `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
 | `GET /api/sun` | Next sunrise/sunset times and countdowns |
 | `WS /ws` | Live reading/status broadcast |
 
 ## Notes
 
 - If the inverter is unreachable, the backend logs the error, broadcasts an
-  `error` message over the WebSocket, and retries after `ERROR_RETRY_DELAY`
-  seconds — it never crashes, matching the original script's behavior.
+  `error` message over the WebSocket, records a powercut event (see above),
+  and retries after `ERROR_RETRY_DELAY` seconds — it never crashes, matching
+  the original script's behavior.
 - The frontend treats any gap between consecutive points larger than 5 minutes
   (e.g. a restart, a Wi-Fi drop, or the day/night transition) as a break in the
   line rather than interpolating across it.
