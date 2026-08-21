@@ -2,7 +2,7 @@
 // and starts the periodic refreshes. All other modules are plain imports
 // with no knowledge of this wiring.
 
-import { DAILY_SUMMARY_REFRESH_MS, SUN_INFO_REFRESH_MS } from './config.js';
+import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS } from './config.js';
 import { state, setRange } from './state.js';
 import { fetchHistory, fetchDailySummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
@@ -29,6 +29,22 @@ document.getElementById('pcRange').addEventListener('change', (e) => {
   pcRange = e.target.value;
   loadPowercutCount();
 });
+
+// ---------- Day-mode polling manager ----------
+// Daily summary and powercuts only change while the inverter is awake, so
+// their intervals run in day mode and are torn down during night mode.
+const dayTimers = [];
+
+function startDayPolling(){
+  if(dayTimers.length) return; // already running
+  dayTimers.push(setInterval(loadDailySummary, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
+}
+
+function stopDayPolling(){
+  dayTimers.forEach(clearInterval);
+  dayTimers.length = 0;
+}
 
 // ---------- Data loading ----------
 async function loadHistory(){
@@ -88,6 +104,8 @@ function handleWSMessage(msg){
       last_error: msg.last_error,
       last_reading_at: msg.last_successful_reading_at,
     });
+    // Reconcile polling with the server's current mode (covers reconnects).
+    msg.night_mode ? stopDayPolling() : startDayPolling();
   }
   else if(msg.type === 'reading'){
     setMode(false);
@@ -106,6 +124,7 @@ function handleWSMessage(msg){
     setNightText(`Inverter is asleep. Resuming in ~${(msg.seconds_until_sunrise/3600).toFixed(1)}h.`);
     refreshSunInfo();
     setInverterStatus('night');
+    stopDayPolling();
   }
   else if(msg.type === 'wake_up'){
     setMode(false);
@@ -114,6 +133,10 @@ function handleWSMessage(msg){
     refreshSunInfo();
     // Next poll (seconds away) confirms online vs offline via reading/error.
     if(msg.status) setInverterStatus(msg.status, msg);
+    // Fresh data after the long idle stretch, then resume the day cadence.
+    loadDailySummary();
+    loadPowercutCount();
+    startDayPolling();
   }
   else if(msg.type === 'error'){
     // Backend already retries; just reflect it isn't fresh data
@@ -147,11 +170,11 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadDailySummary();
   await loadPowercutCount();
   connectWebSocket(handleWSMessage);
-  // Refresh the daily summary chart periodically (cheap query, catches new days)
-  setInterval(loadDailySummary, DAILY_SUMMARY_REFRESH_MS);
-  // Keep the powercut counter fresh (e.g. a cut that started while the tab
-  // was open on another device) without any user action.
-  setInterval(loadPowercutCount, 60000);
+  // Daily summary + powercuts intervals follow day/night (see
+  // startDayPolling/stopDayPolling); the initial /api/status already told us
+  // the mode, so only start here when it's day. Sun info keeps its own fixed
+  // schedule regardless of mode.
+  if(!state.nightMode) startDayPolling();
   // Local 1-second countdown tick (no network call), plus a periodic
   // full refresh from the server to stay accurate over long sessions.
   startSunTicker();
