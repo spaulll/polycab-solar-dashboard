@@ -70,7 +70,26 @@ latest_state: dict = {
     "status": "online",                 # online | offline | night
     "offline_since": None,              # ISO UTC timestamp or None
     "last_successful_reading_at": None,
+    "consecutive_error_count": 0,
 }
+
+
+async def _ping(host: str) -> bool:
+    """
+    True if `host` answers a couple of quick ICMP pings. Used to tell a real
+    powercut (the whole circuit is down) apart from an inverter/Wi-Fi-dongle
+    glitch (the rest of the network still has power).
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ping", "-c", "2", "-W", "1", host,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        return (await proc.wait()) == 0
+    except Exception as e:
+        print(f"[PING ERROR] {host}: {e}")
+        return False
 
 
 def status_snapshot() -> dict:
@@ -137,7 +156,9 @@ async def polling_loop():
 
             database.enqueue_reading(reading)
 
-            # Successful reading after errors -> close any open powercut row.
+            # Successful reading after errors -> reset glitch counting and
+            # close any open powercut row.
+            latest_state["consecutive_error_count"] = 0
             database.close_open_powercut()
 
             latest_state["night_mode"] = False
@@ -158,14 +179,25 @@ async def polling_loop():
             err_msg = str(e)
             now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
             print(f"[{now_iso}] Read Error: {err_msg}")
-            # First error after a successful reading -> open a powercut row.
-            # Errors while already offline, or during night mode, don't create
-            # new rows (record_powercut_start is idempotent as a safety net).
-            if latest_state["status"] != "offline":
-                database.record_powercut_start(err_msg)
-                latest_state["offline_since"] = now_iso
-            latest_state["status"] = "offline"
             latest_state["last_error"] = err_msg
+            latest_state["consecutive_error_count"] += 1
+
+            # Only a run of POWERCUT_ERROR_THRESHOLD consecutive daytime
+            # errors counts as a powercut; shorter glitches stay visible via
+            # last_error but never flip the status or open a DB row.
+            if (
+                latest_state["status"] != "offline"
+                and latest_state["consecutive_error_count"] == config.POWERCUT_ERROR_THRESHOLD
+            ):
+                if config.POWERCUT_CHECK_IP and await _ping(config.POWERCUT_CHECK_IP):
+                    # The rest of the circuit still has power: inverter/dongle
+                    # glitch, not a powercut.
+                    print(f"[{now_iso}] {config.POWERCUT_CHECK_IP} reachable "
+                          f"-- not recording powercut")
+                else:
+                    database.record_powercut_start(err_msg)
+                    latest_state["offline_since"] = now_iso
+                    latest_state["status"] = "offline"
             await manager.broadcast({
                 "type": "error",
                 "message": err_msg,

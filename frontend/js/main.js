@@ -141,7 +141,10 @@ function handleWSMessage(msg){
   else if(msg.type === 'error'){
     // Backend already retries; just reflect it isn't fresh data
     setConnText('read error — retrying');
-    setInverterStatus('offline', {
+    // The server decides the health status: below the powercut error
+    // threshold it stays as-is (usually online) and only the Last Error
+    // field updates; a confirmed cut arrives with status 'offline'.
+    setInverterStatus(msg.status || 'offline', {
       offline_since: msg.offline_since,
       last_error: msg.message ?? msg.last_error,
     });

@@ -46,6 +46,18 @@ REGISTER_COUNT: int = _env_int("REGISTER_COUNT", 60)
 POLL_DELAY: float = _env_float("POLL_DELAY", 5.0)  # seconds between reads during the day
 ERROR_RETRY_DELAY: float = _env_float("ERROR_RETRY_DELAY", 5.0)  # seconds to wait after a read error
 
+# --- Powercut detection ---
+# Consecutive daytime read errors required before a powercut is even
+# considered -- short glitches (Wi-Fi dongle hiccups etc.) stay below this
+# and are never recorded.
+POWERCUT_ERROR_THRESHOLD: int = _env_int("POWERCUT_ERROR_THRESHOLD", 5)
+# Optional: IP of an always-on device on the same power circuit (e.g. a
+# Wi-Fi extender). Before confirming a powercut we ping it -- if it answers,
+# the mains are fine and the errors were just an inverter/dongle glitch, so
+# no powercut is recorded. Leave empty to treat N consecutive errors as a
+# powercut unconditionally.
+POWERCUT_CHECK_IP: str = os.environ.get("POWERCUT_CHECK_IP", "").strip()
+
 # --- Storage ---
 DB_PATH: str = os.environ.get("DB_PATH", "solar_data.db")
 
