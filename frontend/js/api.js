@@ -29,6 +29,12 @@ function fetchSolarProfile(){
   return getJSON('/api/history/solar-profile');
 }
 
+// Peak Production insight: server-side MAX over raw DB readings plus the
+// original timestamp of that record. Independent of chart aggregation.
+function fetchPeakProduction(range){
+  return getJSON(`/api/insights/peak?range=${range}`);
+}
+
 function fetchDailySummary(){
   return getJSON('/api/daily-summary').then(json => json.days || []);
 }
@@ -53,6 +59,7 @@ export {
   fetchHistory,
   fetchSolarSessions,
   fetchSolarProfile,
+  fetchPeakProduction,
   fetchDailySummary,
   fetchStatus,
   fetchSunInfo,

@@ -749,6 +749,60 @@ def get_history(range_str: str = "24h") -> list[dict]:
     )
 
 
+def _utc_iso(value: str) -> str:
+    """Normalize a stored timestamp into an unambiguous UTC ISO string."""
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def local_days_ago_start_utc(days_back: int) -> str:
+    """
+    UTC ISO cutoff at local midnight N days back (0 = today's midnight), so
+    string comparisons against stored UTC timestamps stay correct.
+    """
+    tz = _local_tz()
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    start_local = (now_local - timedelta(days=days_back)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return start_local.astimezone(timezone.utc).isoformat()
+
+
+def get_peak_solar_input(since: Optional[str] = None) -> Optional[dict]:
+    """
+    Peak Production source of truth: MAX(solar_input) taken directly from the
+    full-resolution `readings` table, together with that row's original
+    timestamp. Deliberately independent of every chart aggregation (15-minute
+    session buckets, long-term profile averages) -- never interpolated or
+    derived from averaged data.
+
+    since: optional UTC ISO cutoff; None means the whole table.
+    Returns {"value": W, "timestamp": UTC ISO} or None when there is no data.
+    """
+    conn = _connect()
+    try:
+        if since is None:
+            row = conn.execute(
+                "SELECT solar_input AS value, timestamp FROM readings "
+                "WHERE solar_input IS NOT NULL "
+                "ORDER BY solar_input DESC, timestamp ASC LIMIT 1"
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT solar_input AS value, timestamp FROM readings "
+                "WHERE solar_input IS NOT NULL AND timestamp >= ? "
+                "ORDER BY solar_input DESC, timestamp ASC LIMIT 1",
+                (since,),
+            ).fetchone()
+    finally:
+        conn.close()
+    if row is None or row["value"] is None:
+        return None
+    return {"value": row["value"], "timestamp": _utc_iso(row["timestamp"])}
+
+
 def get_daily_summary() -> list[dict]:
     """
     Max E_Today per calendar day (E_Today is cumulative-per-day from the
