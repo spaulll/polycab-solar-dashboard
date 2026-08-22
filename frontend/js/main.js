@@ -7,7 +7,7 @@ import { state, setRange } from './state.js';
 import { fetchHistory, fetchDailySummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
 import {
-  setMode, setNightText, setConnText, NIGHT_TEXT_DEFAULT,
+  setMode, setNightText, setConn, setConnText, NIGHT_TEXT_DEFAULT,
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
 } from './ui.js';
 import { applyAxisConfigForRange, renderHistory, appendLivePoint, renderDailySummary } from './charts.js';
@@ -106,8 +106,10 @@ function handleWSMessage(msg){
     });
     // Reconcile polling with the server's current mode (covers reconnects).
     msg.night_mode ? stopDayPolling() : startDayPolling();
+    if(!msg.last_error && msg.status !== 'offline') setConn('live');
   }
   else if(msg.type === 'reading'){
+    setConn('live');
     setMode(false);
     dimStatCards(false);
     updateStatCards(msg.data);
