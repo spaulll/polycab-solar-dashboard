@@ -61,6 +61,7 @@ every respect.
 ```
 solar-dashboard/
 ├── main.py                # FastAPI app: WebSocket, REST endpoints, polling loop, lifecycle
+├── solar.py                 # Solar-day sessions & profiles (sunrise-anchored buckets for the charts)
 ├── inverter.py             # Modbus polling + astral sunrise/sunset night-mode logic
 ├── database.py              # SQLite schema, background-thread writer, history/summary/CSV queries
 ├── config.py                # All editable settings (loaded from .env / env vars, see below)
@@ -75,7 +76,7 @@ solar-dashboard/
     │   ├── state.js          # Tiny shared state (selected range, night mode)
     │   ├── api.js            # REST fetchers (history, daily summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
-    │   ├── charts.js         # Chart.js setup, gap-breaking, live-point appending
+    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
     │   ├── ui.js             # Status pills, night banner, stat cards
@@ -158,6 +159,11 @@ directory (path controlled by `DB_PATH`). The schema is created via
   powercut count per selected range.
 - **Historical/aggregate/CSV endpoints** query SQLite directly and are safe to
   call anytime, independent of the live polling loop.
+- **Solar-day views** (`solar.py`): the Today/7D/All charts are shaped around
+  solar days — per-date sunrise/sunset windows come from `inverter.py`'s
+  astral calculation, sessions are bucketed relative to each day's sunrise,
+  and the long-term profile is aggregated inside SQLite. Raw readings are
+  never modified; this is purely a read-side view.
 
 ## REST API
 
