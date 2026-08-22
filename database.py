@@ -560,6 +560,92 @@ def _history_raw(since: Optional[str]) -> list[dict]:
         conn.close()
 
 
+def get_history_between(since: str, until: Optional[str] = None) -> list[dict]:
+    """
+    Full-resolution readings with since <= timestamp <= until (ISO UTC
+    strings; until=None means open-ended). Lexicographic comparison is safe
+    here because every stored timestamp shares the same ISO-UTC prefix.
+    """
+    conn = _connect()
+    try:
+        if until is None:
+            rows = conn.execute(
+                "SELECT * FROM readings WHERE timestamp >= ? ORDER BY timestamp ASC",
+                (since,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM readings WHERE timestamp >= ? AND timestamp <= ? "
+                "ORDER BY timestamp ASC",
+                (since, until),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_readings_time_span() -> tuple[Optional[str], Optional[str]]:
+    """(oldest, newest) raw timestamps, or (None, None) for an empty table."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT MIN(timestamp) AS lo, MAX(timestamp) AS hi FROM readings"
+        ).fetchone()
+        return row["lo"], row["hi"]
+    finally:
+        conn.close()
+
+
+def aggregate_solar_profile(
+    windows: list[tuple[str, str]], bin_seconds: int
+) -> list[dict]:
+    """
+    Aggregate raw daylight readings into fixed bins of seconds-after-sunrise.
+
+    windows: list of (sunrise_utc_naive_iso, sunset_utc_naive_iso) pairs, one
+    per historical solar day. All binning/averaging runs inside SQLite as a
+    single indexed scan joined against a temp table of day windows, so no
+    large row sets ever cross into Python regardless of history length.
+
+    Returns rows of {o: bin start seconds-after-sunrise, s_avg, i_avg, n}.
+    """
+    if not windows:
+        return []
+    conn = _connect()
+    try:
+        conn.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS sun_windows ("
+            "  sunrise TEXT PRIMARY KEY, sunset TEXT NOT NULL)"
+        )
+        conn.execute("DELETE FROM sun_windows")
+        conn.executemany("INSERT INTO sun_windows VALUES (?, ?)", windows)
+        rows = conn.execute(
+            """
+            SELECT
+                CAST((julianday(r.timestamp) - julianday(w.sunrise)) * 86400
+                     / ? AS INTEGER) AS bin,
+                AVG(r.solar_input)    AS s_avg,
+                AVG(r.inverter_power) AS i_avg,
+                COUNT(*)              AS n
+            FROM readings r
+            JOIN sun_windows w
+              ON r.timestamp BETWEEN w.sunrise AND w.sunset
+            GROUP BY bin
+            HAVING bin >= 0
+            ORDER BY bin ASC
+            """,
+            (bin_seconds,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    # Convert bin indices back into seconds-after-sunrise for the API.
+    return [
+        {"o": r["bin"] * bin_seconds, "s_avg": r["s_avg"], "i_avg": r["i_avg"], "n": r["n"]}
+        for r in rows
+    ]
+
+
 def _history_hourly(since_iso: str) -> list[dict]:
     """
     Hourly-aggregated history. Rows are reshaped to look like raw readings
@@ -733,16 +819,22 @@ def get_db_status() -> dict:
 # ---------------------------------------------------------------------------
 # CSV export
 # ---------------------------------------------------------------------------
-def export_csv(range_str: str = "all") -> str:
-    rows = get_history(range_str)
+CSV_FIELDNAMES = [
+    "timestamp", "l1_voltage", "l1_current", "inverter_power",
+    "solar_input", "temperature", "e_total", "e_today",
+    "active_power", "peak_power",
+]
+
+
+def export_rows_to_csv(rows: list[dict]) -> str:
+    """Serialize history rows (any shape) to CSV text."""
     buf = io.StringIO()
-    fieldnames = [
-        "timestamp", "l1_voltage", "l1_current", "inverter_power",
-        "solar_input", "temperature", "e_total", "e_today",
-        "active_power", "peak_power",
-    ]
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDNAMES, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
         writer.writerow(row)
     return buf.getvalue()
+
+
+def export_csv(range_str: str = "all") -> str:
+    return export_rows_to_csv(get_history(range_str))

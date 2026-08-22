@@ -10,7 +10,13 @@ const GAP_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 // In-memory trim window per range so the live chart doesn't grow unbounded
 // during a long session.
-const MAX_POINTS = { '1h': 800, '24h': 3000, '7d': 5000, 'all': 6000 };
+const MAX_POINTS = { '1h': 800, 'today': 3000, '7d': 5000, 'all': 6000 };
+
+// 7D view: how many solar days to compare (including the current one).
+const SESSION_DAYS = 7;
+
+// 7D view: bucket width in seconds for the sequential solar-day timeline.
+const SESSION_BIN_SECONDS = 900; // 15 minutes
 
 // WebSocket reconnect delay after the connection drops.
 const WS_RECONNECT_DELAY_MS = 3000;
@@ -26,6 +32,8 @@ export {
   WS_URL,
   GAP_THRESHOLD_MS,
   MAX_POINTS,
+  SESSION_DAYS,
+  SESSION_BIN_SECONDS,
   WS_RECONNECT_DELAY_MS,
   DAILY_SUMMARY_REFRESH_MS,
   POWERCUTS_REFRESH_MS,

@@ -41,15 +41,41 @@ def close_client() -> None:
         _client = None
 
 
+def _city_info() -> LocationInfo:
+    """The configured location -- single source of truth for sun math."""
+    return LocationInfo(
+        config.CITY, config.COUNTRY, config.TIMEZONE,
+        config.LATITUDE, config.LONGITUDE,
+    )
+
+
+def local_tz():
+    """The configured location's timezone (tzinfo object)."""
+    return _city_info().tzinfo
+
+
+def get_day_sun(for_date: Optional[datetime.date] = None) -> dict:
+    """
+    Sunrise/sunset for one local calendar date (defaults to today), as
+    tz-aware ISO timestamps. This is the shared source of truth for the
+    solar-day chart windows (Today / 7D / All views).
+    """
+    city_info = _city_info()
+    d = for_date or datetime.date.today()
+    s = sun(city_info.observer, d, tzinfo=city_info.tzinfo)
+    return {
+        "date": d.isoformat(),
+        "sunrise": s["sunrise"].isoformat(),
+        "sunset": s["sunset"].isoformat(),
+    }
+
+
 def get_seconds_until_sunrise() -> float:
     """
     Returns seconds until next sunrise if it is currently night.
     Returns 0.0 if it is currently daytime.
     """
-    city_info = LocationInfo(
-        config.CITY, config.COUNTRY, config.TIMEZONE,
-        config.LATITUDE, config.LONGITUDE,
-    )
+    city_info = _city_info()
     now = datetime.datetime.now(city_info.tzinfo)
 
     s_today = sun(city_info.observer, datetime.date.today(), tzinfo=city_info.tzinfo)
@@ -85,10 +111,7 @@ def get_sun_info() -> dict:
       - seconds_until_sunset: 0 if it's currently night (sunset already
         passed, before next sunrise)
     """
-    city_info = LocationInfo(
-        config.CITY, config.COUNTRY, config.TIMEZONE,
-        config.LATITUDE, config.LONGITUDE,
-    )
+    city_info = _city_info()
     now = datetime.datetime.now(city_info.tzinfo)
 
     s_today = sun(city_info.observer, datetime.date.today(), tzinfo=city_info.tzinfo)

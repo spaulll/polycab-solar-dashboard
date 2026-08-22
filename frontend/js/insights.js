@@ -40,9 +40,12 @@ function computeInsights(readings){
 
   if(peak){
     el('insightPeakValue').textContent = fmt(peak.solar_input, 0) + ' W';
-    el('insightPeakTime').textContent = new Date(peak.timestamp).toLocaleString([], {
-      month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
-    });
+    // Normalized-profile bins carry their solar-day position as a label
+    // instead of a wall-clock timestamp.
+    el('insightPeakTime').textContent = peak.label
+      ?? new Date(peak.timestamp).toLocaleString([], {
+        month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
+      });
   }
 
   el('insightAvg').textContent = fmt(avgSolar, 0) + ' W';

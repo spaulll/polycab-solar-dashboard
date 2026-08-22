@@ -4,13 +4,13 @@
 
 import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS } from './config.js';
 import { state, setRange } from './state.js';
-import { fetchHistory, fetchDailySummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
+import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchDailySummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
 import {
   setMode, setNightText, setConn, setConnText, NIGHT_TEXT_DEFAULT,
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
 } from './ui.js';
-import { applyAxisConfigForRange, renderHistory, appendLivePoint, renderDailySummary } from './charts.js';
+import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary } from './charts.js';
 import { computeInsights } from './insights.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 
@@ -47,14 +47,62 @@ function stopDayPolling(){
 }
 
 // ---------- Data loading ----------
+// Each range has its own data source and chart view:
+//   1h/today -> /api/history (today additionally carries its sun window)
+//   7d       -> /api/history/solar-sessions (per-day, normalized to sunrise)
+//   all      -> /api/history/solar-profile (long-term normalized profile)
 async function loadHistory(){
   try{
-    const readings = await fetchHistory(state.range);
-    renderHistory(readings);
-    computeInsights(readings);
+    if(state.range === '7d'){
+      const sessions = await fetchSolarSessions();
+      renderSessions(sessions);
+      computeInsights(flattenSessions(sessions));
+    } else if(state.range === 'all'){
+      const profile = await fetchSolarProfile();
+      renderProfile(profile);
+      computeInsights(flattenProfile(profile));
+    } else {
+      const {readings, sun} = await fetchHistory(state.range);
+      renderHistory(readings, sun);
+      computeInsights(readings);
+    }
   }catch(e){
     console.error('Failed to load history', e);
   }
+}
+
+// Reshape solar session buckets into timestamped readings so the insights
+// panel can keep working unchanged (peak time stays a real wall-clock time).
+function flattenSessions(sessions){
+  const out = [];
+  for(const s of sessions){
+    const riseMs = Date.parse(s.sunrise);
+    for(const p of s.buckets || []){
+      out.push({
+        timestamp: new Date(riseMs + p.o * 1000).toISOString(),
+        solar_input: p.s,
+        inverter_power: p.i,
+      });
+    }
+  }
+  return out;
+}
+
+// Profile bins have no single wall-clock time; carry their solar-day
+// position as a label for the insights panel instead.
+function flattenProfile(profile){
+  return (profile.bins || []).map(b => ({
+    timestamp: null,
+    solar_input: b.s_avg,
+    inverter_power: b.i_avg,
+    label: offsetLabel(b.o),
+  }));
+}
+
+function offsetLabel(sec){
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return m ? `+${h}h ${String(m).padStart(2,'0')}m` : `+${h}h`;
 }
 
 async function loadDailySummary(){
@@ -169,7 +217,6 @@ document.getElementById('csvBtn').addEventListener('click', () => {
 
 // ---------- Boot ----------
 (async function init(){
-  applyAxisConfigForRange(state.range);
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();

@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 import database
 import inverter
+import solar
 
 
 # ---------------------------------------------------------------------------
@@ -286,12 +287,56 @@ async def websocket_endpoint(websocket: WebSocket):
 # REST endpoints
 # ---------------------------------------------------------------------------
 @app.get("/api/history")
-async def api_history(range: str = Query("24h", description="1h | 24h | 7d | all")):
+async def api_history(
+    range: str = Query("24h", description="1h | today | 24h | 7d | all"),
+):
     try:
+        if range == "today":
+            # Current solar day (sunrise -> now/sunset), not a rolling 24h.
+            # The sun window is included so the frontend can bound the chart
+            # axis without duplicating sunrise/sunset logic client-side.
+            sun_info = await asyncio.to_thread(solar.get_today_window)
+            rows = await asyncio.to_thread(
+                database.get_history_between, sun_info["since"], None
+            )
+            return {
+                "range": range,
+                "count": len(rows),
+                "readings": rows,
+                "sun": sun_info,
+            }
         rows = await asyncio.to_thread(database.get_history, range)
     except ValueError as e:
         return {"error": str(e)}
     return {"range": range, "count": len(rows), "readings": rows}
+
+
+@app.get("/api/history/solar-sessions")
+async def api_solar_sessions(
+    days: int = Query(7, ge=1, le=30),
+    bin: int = Query(60, description="Bucket width in seconds: 60 | 300 | 900"),
+):
+    """
+    Daylight sessions for the last N local dates, each normalized to its own
+    sunrise. Powers the 7D solar-day view; days without data come back with
+    an empty bucket list rather than fabricated values. `bin` selects the
+    aggregation width (900 = 15-minute buckets for the sequential timeline);
+    buckets failing the minimum-coverage rule are omitted.
+    """
+    try:
+        return await asyncio.to_thread(solar.get_solar_sessions, days, bin)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/history/solar-profile")
+async def api_solar_profile(bin_minutes: int = Query(5, ge=1, le=30)):
+    """
+    Long-term average power vs position within the solar day, aggregated
+    server-side over all historical daylight readings. Deliberately distinct
+    from /api/daily-summary (date -> kWh totals).
+    """
+    return await asyncio.to_thread(solar.get_solar_profile, bin_minutes)
 
 
 @app.get("/api/daily-summary")
@@ -307,9 +352,18 @@ async def api_db_status():
 
 
 @app.get("/api/export")
-async def api_export(range: str = Query("all", description="1h | 24h | 7d | all")):
+async def api_export(
+    range: str = Query("all", description="1h | today | 24h | 7d | all"),
+):
     try:
-        csv_text = await asyncio.to_thread(database.export_csv, range)
+        if range == "today":
+            sun_info = await asyncio.to_thread(solar.get_today_window)
+            rows = await asyncio.to_thread(
+                database.get_history_between, sun_info["since"], None
+            )
+            csv_text = await asyncio.to_thread(database.export_rows_to_csv, rows)
+        else:
+            csv_text = await asyncio.to_thread(database.export_csv, range)
     except ValueError as e:
         return {"error": str(e)}
     filename = f"solar_export_{range}.csv"

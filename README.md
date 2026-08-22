@@ -163,7 +163,9 @@ directory (path controlled by `DB_PATH`). The schema is created via
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/history?range=1h\|24h\|7d\|all` | Raw readings in the given range |
+| `GET /api/history?range=1h\|today\|24h\|7d\|all` | Raw readings in the given range. `today` returns the current solar day (sunrise → now) plus its `sun` window so charts can be bounded correctly; `24h` remains a rolling window for compatibility |
+| `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
+| `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day (for the bar chart) |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
@@ -180,5 +182,13 @@ directory (path controlled by `DB_PATH`). The schema is created via
 - The frontend treats any gap between consecutive points larger than 5 minutes
   (e.g. a restart, a Wi-Fi drop, or the day/night transition) as a break in the
   line rather than interpolating across it.
+- **Power Over Time views**: `1H` is a rolling real-time window, `Today` shows
+  only the current solar day (sunrise → min(now, sunset), from the backend's
+  astral calculation — never yesterday's data or future time), `7D` renders
+  the seven days as one sequential timeline of 15-minute averaged buckets
+  (nighttime occupies zero horizontal width; missing buckets break the line),
+  and `All` shows a long-term average power profile over position within the
+  solar day (aggregated server-side). The Daily Energy Log remains the
+  date → kWh totals chart.
 - To reset all history, stop the server and delete the SQLite file (`solar_data.db`
   by default).
