@@ -159,7 +159,9 @@ directory (path controlled by `DB_PATH`). The schema is created via
   a powercut when the check IP is also unreachable — this catches the window
   where the inverter still answers Modbus on residual power but produces
   nothing. A small non-zero `Solar_Input` with a zero `Inverter_Power` (low
-  light) is intentionally ignored. The next successful read showing real
+  light) is intentionally ignored. The zero-production signal must repeat for
+  `POWERCUT_ZERO_THRESHOLD` consecutive reads (default 3) before a row is
+  opened. The next successful read showing real
   production closes the open row with a computed duration. Errors during night
   mode are ignored, and an open row survives app/host restarts — so offline
   episodes are recorded even when the dashboard machine itself loses power.

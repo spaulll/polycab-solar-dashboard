@@ -76,6 +76,8 @@ latest_state: dict = {
     "offline_since": None,              # ISO UTC timestamp or None
     "last_successful_reading_at": None,
     "consecutive_error_count": 0,
+    "zero_powercut_confirmations": 0,
+    "zero_cut_started_at": None,
 }
 
 
@@ -167,35 +169,57 @@ async def polling_loop():
             # Only treat that as an outage when the always-on check device is
             # also unreachable (a small non-zero Solar_Input with a zero
             # Inverter_Power -- e.g. low light -- must NOT count here, which is
-            # why Active_Power-style OR-sums are deliberately avoided).
+            # why Active_Power-style OR-sums are deliberately avoided). The
+            # condition must hold for POWERCUT_ZERO_THRESHOLD consecutive
+            # reads before the cut is recorded, guarding against flaky pings.
             solar_zero = reading.get("Solar_Input", 0.0) <= ZERO_PRODUCTION_THRESHOLD
             inverter_zero = reading.get("Inverter_Power", 0.0) <= ZERO_PRODUCTION_THRESHOLD
 
-            zero_production_powercut = False
-            if solar_zero and inverter_zero:
-                if config.POWERCUT_CHECK_IP:
-                    if await _ping(config.POWERCUT_CHECK_IP):
+            # When True, a successful read must NOT close the open powercut
+            # row: the outage looks like it's still in progress.
+            zero_production_outage = False
+            if solar_zero and inverter_zero and config.POWERCUT_CHECK_IP:
+                if await _ping(config.POWERCUT_CHECK_IP):
+                    print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD} "
+                          f"but check IP reachable -> not a powercut")
+                else:
+                    # Suppress closing regardless of whether this read is
+                    # still counting confirmations or already confirmed. The
+                    # counter is capped at the threshold so an ongoing cut
+                    # logs "ongoing" instead of "4/3".
+                    zero_production_outage = True
+                    prev = latest_state["zero_powercut_confirmations"]
+                    confirmations = min(prev + 1, config.POWERCUT_ZERO_THRESHOLD)
+                    latest_state["zero_powercut_confirmations"] = confirmations
+                    if confirmations < config.POWERCUT_ZERO_THRESHOLD:
                         print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD} "
-                              f"but check IP reachable -> not a powercut")
-                    else:
+                              f"+ check IP unreachable ({confirmations}/"
+                              f"{config.POWERCUT_ZERO_THRESHOLD}) -> waiting")
+                    elif prev < config.POWERCUT_ZERO_THRESHOLD:
                         print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD} "
-                              f"+ check IP unreachable -> recording powercut")
+                              f"+ check IP unreachable ({confirmations}/"
+                              f"{config.POWERCUT_ZERO_THRESHOLD}) -> recording powercut")
                         database.record_powercut_start(
                             "zero production + check IP unreachable"
                         )
-                        zero_production_powercut = True
-                else:
-                    print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD}, "
-                          f"no check IP configured -> cannot verify outage")
+                        latest_state["zero_cut_started_at"] = now_iso
+                    else:
+                        print(f"[{now_iso}] ongoing powercut: both powers <= "
+                              f"{ZERO_PRODUCTION_THRESHOLD} + check IP unreachable")
+            elif solar_zero and inverter_zero:
+                print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD}, "
+                      f"no check IP configured -> cannot verify outage")
 
             # Successful reading after errors -> reset glitch counting and
             # close any open powercut row -- unless this successful read just
-            # confirmed an ongoing/starting outage (zero powers + dead check
-            # IP), in which case the row must stay open until production or
-            # the network actually comes back.
+            # confirmed/continued an outage (zero powers + dead check IP), in
+            # which case the row must stay open until production or the
+            # network actually comes back.
             latest_state["consecutive_error_count"] = 0
-            if not zero_production_powercut:
+            if not zero_production_outage:
                 database.close_open_powercut()
+                latest_state["zero_powercut_confirmations"] = 0
+                latest_state["zero_cut_started_at"] = None
 
             latest_state["night_mode"] = False
             latest_state["last_reading"] = reading
@@ -203,9 +227,15 @@ async def polling_loop():
             latest_state["status"] = "online"
             latest_state["offline_since"] = None
             latest_state["last_successful_reading_at"] = now_iso
-            if zero_production_powercut:
+            if (zero_production_outage
+                    and latest_state["zero_powercut_confirmations"]
+                    >= config.POWERCUT_ZERO_THRESHOLD):
+                # Confirmed ongoing outage: keep the offline UI state (the
+                # generic "success" assignments above would otherwise clear it).
                 latest_state["status"] = "offline"
-                latest_state["offline_since"] = now_iso
+                latest_state["offline_since"] = (
+                    latest_state["zero_cut_started_at"] or now_iso
+                )
 
             await manager.broadcast({
                 "type": "reading",

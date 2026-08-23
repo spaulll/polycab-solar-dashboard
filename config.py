@@ -51,6 +51,10 @@ ERROR_RETRY_DELAY: float = _env_float("ERROR_RETRY_DELAY", 5.0)  # seconds to wa
 # considered -- short glitches (Wi-Fi dongle hiccups etc.) stay below this
 # and are never recorded.
 POWERCUT_ERROR_THRESHOLD: int = _env_int("POWERCUT_ERROR_THRESHOLD", 5)
+# Consecutive successful reads with both power values ~0 AND the check IP
+# unreachable required before a zero-production powercut is recorded -- guards
+# against a single flaky ping opening a bogus row.
+POWERCUT_ZERO_THRESHOLD: int = _env_int("POWERCUT_ZERO_THRESHOLD", 3)
 # Optional: IP of an always-on device on the same power circuit (e.g. a
 # Wi-Fi extender). Used for both powercut detection paths:
 #   - Zero-production path: if a successful Modbus read reports both power
