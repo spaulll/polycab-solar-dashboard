@@ -21,16 +21,17 @@ import { fmt } from './format.js';
 
 const el = id => document.getElementById(id);
 
-const SOLAR_RGB = '245,166,35';     // amber -- Solar Input
-const INVERTER_RGB = '91,155,213';  // blue  -- Inverter Power
+const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
+const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
 const rgba = (rgb, a) => `rgba(${rgb},${a})`;
 
-// ---------- Chart.js defaults (dark theme) ----------
-Chart.defaults.color = '#8a9098';
-Chart.defaults.font.family = "'SF Mono', Consolas, Menlo, ui-monospace, monospace";
+// ---------- Chart.js defaults (dark instrument theme) ----------
+Chart.defaults.color = '#9aa1a9';
+Chart.defaults.font.family = "ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
 Chart.defaults.font.size = 11;
 
-const gridColor = 'rgba(255,255,255,0.05)';
+const gridColor = 'rgba(233,231,226,0.06)';
+const axisTitleColor = '#5f666e';
 
 let powerMode = 'rolling';   // rolling | today | sessions | profile
 
@@ -51,7 +52,7 @@ const sessionDayLines = {
     const xs = chart.scales.x;
     if(!xs) return;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.strokeStyle = 'rgba(233,231,226,0.12)';
     ctx.setLineDash([3, 3]);
     ctx.lineWidth = 1;
     for(const m of marks){
@@ -71,7 +72,7 @@ const sessionDayLines = {
     const xs = chart.scales.x;
     if(!xs) return;
     ctx.save();
-    ctx.fillStyle = '#8a9098';
+    ctx.fillStyle = '#9aa1a9';
     ctx.font = '10px ' + Chart.defaults.font.family;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -118,11 +119,11 @@ const powerChart = new Chart(el('powerChart').getContext('2d'), {
         },
       },
       tooltip: {
-        backgroundColor: '#14171a',
-        borderColor: '#23282d',
+        backgroundColor: '#191c20',
+        borderColor: '#34383f',
         borderWidth: 1,
-        titleColor: '#e8e6e1',
-        bodyColor: '#c8ccd0',
+        titleColor: '#e9e7e2',
+        bodyColor: '#9aa1a9',
         padding: 10,
       }
     },
@@ -132,7 +133,7 @@ const powerChart = new Chart(el('powerChart').getContext('2d'), {
         beginAtZero: true,
         grace: '8%',
         grid: { color: gridColor, drawTicks: false },
-        title: { display: true, text: 'Watts', color:'#565d64', font:{size:10} },
+        title: { display: true, text: 'Watts', color: axisTitleColor, font:{size:10} },
       }
     }
   }
@@ -175,7 +176,7 @@ function solarAxisConfig(maxSeconds){
       stepSize: 2 * 3600,
       callback: v => '+' + solarClock(v),
     },
-    title: { display: true, text: 'time after sunrise', color:'#565d64', font:{size:10} },
+    title: { display: true, text: 'time after sunrise', color: axisTitleColor, font:{size:10} },
   };
 }
 
@@ -201,9 +202,8 @@ function setInteraction(view){
 // Legend items. Chart.js's label drawing uses ONLY the item's `fontColor`
 // (no fallback to the chart's default text color), so it must be set
 // explicitly -- otherwise legend text inherits whatever dark fillStyle is
-// left on the canvas context. We reuse Chart.defaults.color ('#8a9098'),
-// the same gray used by every other label on the dashboard. Font family,
-// size and spacing come from the shared legend options in the chart config.
+// left on the canvas context. We reuse Chart.defaults.color, the same gray
+// used by every other label on the dashboard. Font family, size and spacing
 function powerLegendEntries(chart){
   const fontColor = Chart.defaults.color;
   if(powerMode === 'profile'){
@@ -572,7 +572,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
     datasets: [{
       label: 'Energy (kWh)',
       data: [],
-      backgroundColor: 'rgba(245,166,35,0.75)',
+      backgroundColor: 'rgba(226,162,74,0.8)',
       borderRadius: 3,
       maxBarThickness: 26,
     }]
@@ -584,7 +584,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
     plugins: { legend: { display: false } },
     scales: {
       x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
-      y: { beginAtZero: true, grid: { color: gridColor }, title:{display:true,text:'kWh',color:'#565d64',font:{size:10}} }
+      y: { beginAtZero: true, grid: { color: gridColor }, title:{display:true,text:'kWh',color:axisTitleColor,font:{size:10}} }
     }
   }
 });

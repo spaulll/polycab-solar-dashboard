@@ -37,13 +37,19 @@ function setNightText(text){
 const NIGHT_TEXT_DEFAULT = 'Inverter is asleep. Waiting for sunrise…';
 
 function updateStatCards(d){
-  el('statSolar').innerHTML = fmt(d.Solar_Input, 0) + '<span class="unit">W</span>';
-  el('statGrid').innerHTML = fmt(d.L1_Voltage, 1) + '<span class="unit">V</span> / ' + fmt(d.L1_Current, 2) + '<span class="unit">A</span>';
-  el('statInvPower').innerHTML = fmt(d.Inverter_Power, 0) + '<span class="unit">W</span>';
-  el('statTemp').innerHTML = fmt(d.Temperature, 0) + '<span class="unit">°C</span>';
-  el('statToday').innerHTML = fmt(d.E_Today, 2) + '<span class="unit">kWh</span>';
-  el('statLifetime').innerHTML = fmt(d.E_Total, 1) + '<span class="unit">kWh</span>';
+  el('statSolar').innerHTML = fmt(d.Solar_Input, 0) + unit('W');
+  // Both grid metrics on one line: "218.5 V / 2.14 A".
+  el('statGrid').innerHTML =
+    fmt(d.L1_Voltage, 1) + unit('V') +
+    ' <span class="sep">/</span> ' +
+    fmt(d.L1_Current, 2) + unit('A');
+  el('statInvPower').innerHTML = fmt(d.Inverter_Power, 0) + unit('W');
+  el('statTemp').innerHTML = fmt(d.Temperature, 0) + unit('°C');
+  el('statToday').innerHTML = fmt(d.E_Today, 2) + unit('kWh');
+  el('statLifetime').innerHTML = fmt(d.E_Total, 1) + unit('kWh');
 }
+
+const unit = name => '<span class="unit">' + name + '</span>';
 
 function dimStatCards(dim){
   document.querySelectorAll('.stat-card').forEach(c => c.classList.toggle('dim', dim));
