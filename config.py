@@ -52,10 +52,13 @@ ERROR_RETRY_DELAY: float = _env_float("ERROR_RETRY_DELAY", 5.0)  # seconds to wa
 # and are never recorded.
 POWERCUT_ERROR_THRESHOLD: int = _env_int("POWERCUT_ERROR_THRESHOLD", 5)
 # Optional: IP of an always-on device on the same power circuit (e.g. a
-# Wi-Fi extender). Before confirming a powercut we ping it -- if it answers,
-# the mains are fine and the errors were just an inverter/dongle glitch, so
-# no powercut is recorded. Leave empty to treat N consecutive errors as a
-# powercut unconditionally.
+# Wi-Fi extender). Used for both powercut detection paths:
+#   - Zero-production path: if a successful Modbus read reports both power
+#     values as ~0, this IP is pinged -- unreachable here means a real cut.
+#   - Error path: after N consecutive Modbus errors, a powercut is recorded
+#     only when this IP AND the inverter IP are both unreachable.
+# Leave empty to treat N consecutive errors as a powercut unconditionally
+# (the zero-production path is then disabled entirely).
 POWERCUT_CHECK_IP: str = os.environ.get("POWERCUT_CHECK_IP", "").strip()
 
 # --- Storage ---

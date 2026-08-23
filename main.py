@@ -61,6 +61,10 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Both Solar_Input and Inverter_Power at/below this value count as "no
+# production". Tunable: raise if your meter reports small noise values.
+ZERO_PRODUCTION_THRESHOLD: float = 0.1
+
 # Latest known state, so newly-connecting clients get something immediately
 # instead of waiting up to POLL_DELAY seconds for the next tick.
 latest_state: dict = {
@@ -157,10 +161,41 @@ async def polling_loop():
 
             database.enqueue_reading(reading)
 
+            # A real powercut can show up two ways on a *successful* read:
+            # during the inverter's residual-power window Modbus still works
+            # but both power values read 0 while everything else looks normal.
+            # Only treat that as an outage when the always-on check device is
+            # also unreachable (a small non-zero Solar_Input with a zero
+            # Inverter_Power -- e.g. low light -- must NOT count here, which is
+            # why Active_Power-style OR-sums are deliberately avoided).
+            solar_zero = reading.get("Solar_Input", 0.0) <= ZERO_PRODUCTION_THRESHOLD
+            inverter_zero = reading.get("Inverter_Power", 0.0) <= ZERO_PRODUCTION_THRESHOLD
+
+            zero_production_powercut = False
+            if solar_zero and inverter_zero:
+                if config.POWERCUT_CHECK_IP:
+                    if await _ping(config.POWERCUT_CHECK_IP):
+                        print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD} "
+                              f"but check IP reachable -> not a powercut")
+                    else:
+                        print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD} "
+                              f"+ check IP unreachable -> recording powercut")
+                        database.record_powercut_start(
+                            "zero production + check IP unreachable"
+                        )
+                        zero_production_powercut = True
+                else:
+                    print(f"[{now_iso}] both powers <= {ZERO_PRODUCTION_THRESHOLD}, "
+                          f"no check IP configured -> cannot verify outage")
+
             # Successful reading after errors -> reset glitch counting and
-            # close any open powercut row.
+            # close any open powercut row -- unless this successful read just
+            # confirmed an ongoing/starting outage (zero powers + dead check
+            # IP), in which case the row must stay open until production or
+            # the network actually comes back.
             latest_state["consecutive_error_count"] = 0
-            database.close_open_powercut()
+            if not zero_production_powercut:
+                database.close_open_powercut()
 
             latest_state["night_mode"] = False
             latest_state["last_reading"] = reading
@@ -168,6 +203,9 @@ async def polling_loop():
             latest_state["status"] = "online"
             latest_state["offline_since"] = None
             latest_state["last_successful_reading_at"] = now_iso
+            if zero_production_powercut:
+                latest_state["status"] = "offline"
+                latest_state["offline_since"] = now_iso
 
             await manager.broadcast({
                 "type": "reading",
@@ -185,17 +223,27 @@ async def polling_loop():
 
             # Only a run of POWERCUT_ERROR_THRESHOLD consecutive daytime
             # errors counts as a powercut; shorter glitches stay visible via
-            # last_error but never flip the status or open a DB row.
-            if (
-                latest_state["status"] != "offline"
-                and latest_state["consecutive_error_count"] == config.POWERCUT_ERROR_THRESHOLD
+            # last_error but never flip the status or open a DB row. Before
+            # recording we ping both the always-on check device and the
+            # inverter itself: the check device answers -> mains are fine
+            # (glitch); check device down but inverter still answering ->
+            # inverter/dongle issue, keep waiting; both down -> real cut.
+            # Re-evaluated on every error past the threshold so the "waiting"
+            # case can still resolve once the inverter finally dies.
+            if latest_state["status"] != "offline" and (
+                latest_state["consecutive_error_count"] >= config.POWERCUT_ERROR_THRESHOLD
             ):
                 if config.POWERCUT_CHECK_IP and await _ping(config.POWERCUT_CHECK_IP):
                     # The rest of the circuit still has power: inverter/dongle
                     # glitch, not a powercut.
-                    print(f"[{now_iso}] {config.POWERCUT_CHECK_IP} reachable "
-                          f"-- not recording powercut")
+                    print(f"[{now_iso}] Modbus error, check IP reachable "
+                          f"-> not a powercut")
+                elif config.INVERTER_IP and await _ping(config.INVERTER_IP):
+                    print(f"[{now_iso}] Modbus error, check IP down but "
+                          f"inverter still reachable -> waiting")
                 else:
+                    print(f"[{now_iso}] Modbus error, both unreachable "
+                          f"-> recording powercut")
                     database.record_powercut_start(err_msg)
                     latest_state["offline_since"] = now_iso
                     latest_state["status"] = "offline"

@@ -150,13 +150,21 @@ directory (path controlled by `DB_PATH`). The schema is created via
 - **WebSocket clients** (`/ws`) get every new reading pushed immediately, plus
   an `init` message on connect with the latest known state (including inverter
   health) so the UI isn't blank while waiting for the next tick.
-- **Powercut tracking**: the first Modbus error after a successful reading
-  opens a row in the `powercuts` table; the next successful reading closes it
-  with a computed duration. Errors during night mode are ignored, and an open
-  row survives app/host restarts — so offline episodes are recorded even when
-  the dashboard machine itself loses power. The Inverter Status card shows the
-  live state (Online / Unreachable + offline timer / Night mode) and a
-  powercut count per selected range.
+- **Powercut tracking** uses dual detection. *Hard Modbus failures* still use
+  the consecutive-error threshold (`POWERCUT_ERROR_THRESHOLD`): once crossed, a
+  powercut is recorded only when both the check IP and the inverter IP are
+  unreachable (check IP up → glitch; check IP down but inverter still answering
+  → keep waiting). Additionally, *successful reads* that report both
+  `Solar_Input ≤ 0.1` **and** `Inverter_Power ≤ 0.1` are treated as the start of
+  a powercut when the check IP is also unreachable — this catches the window
+  where the inverter still answers Modbus on residual power but produces
+  nothing. A small non-zero `Solar_Input` with a zero `Inverter_Power` (low
+  light) is intentionally ignored. The next successful read showing real
+  production closes the open row with a computed duration. Errors during night
+  mode are ignored, and an open row survives app/host restarts — so offline
+  episodes are recorded even when the dashboard machine itself loses power.
+  The Inverter Status card shows the live state (Online / Unreachable + offline
+  timer / Night mode) and a powercut count per selected range.
 - **Historical/aggregate/CSV endpoints** query SQLite directly and are safe to
   call anytime, independent of the live polling loop.
 - **Solar-day views** (`solar.py`): the Today/7D/All charts are shaped around
