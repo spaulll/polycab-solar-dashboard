@@ -737,9 +737,9 @@ select:hover{ color: var(--text); }
 
 .pc-count{
   font-family: var(--mono);
-  font-size: 40px;
+  font-size: 28px;
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.1;
   color: var(--text);
   margin-top: 4px;
 }
