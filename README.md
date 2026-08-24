@@ -65,6 +65,7 @@ solar-dashboard/
 ├── solar.py                 # Solar-day sessions & profiles (sunrise-anchored buckets for the charts)
 ├── inverter.py             # Modbus polling + astral sunrise/sunset night-mode logic
 ├── database.py              # SQLite schema, background-thread writer, history/summary/CSV queries
+├── weather.py               # Weather for the top-bar chip (OpenWeatherMap + Open-Meteo fallback, cached)
 ├── config.py                # All editable settings (loaded from .env / env vars, see below)
 ├── .env.example               # Template for your real config -- copy to .env and fill in
 ├── requirements.txt
@@ -82,6 +83,7 @@ solar-dashboard/
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
     │   ├── ui.js             # Status pills, night banner, stat cards
     │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
+    │   ├── weather.js        # Weather chip + popup UI
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
 ```
