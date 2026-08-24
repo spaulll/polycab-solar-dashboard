@@ -39,6 +39,11 @@ function fetchDailySummary(){
   return getJSON('/api/daily-summary').then(json => json.days || []);
 }
 
+// Generation KPI strip: today/yesterday/week/month/year/lifetime kWh.
+function fetchGenerationSummary(){
+  return getJSON('/api/generation/summary');
+}
+
 function fetchStatus(){
   return getJSON('/api/status');
 }
@@ -61,6 +66,7 @@ export {
   fetchSolarProfile,
   fetchPeakProduction,
   fetchDailySummary,
+  fetchGenerationSummary,
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,

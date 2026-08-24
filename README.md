@@ -74,7 +74,7 @@ solar-dashboard/
     │   ├── main.js           # Entry point: boot sequence, event wiring, WS message routing
     │   ├── config.js         # Endpoints and tuning constants (gap threshold, trim sizes, refresh rates)
     │   ├── state.js          # Tiny shared state (selected range, night mode)
-    │   ├── api.js            # REST fetchers (history, daily summary, status, sun, CSV URL)
+    │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
     │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending
     │   ├── insights.js       # Conversion loss / peak / average computations
@@ -174,6 +174,12 @@ directory (path controlled by `DB_PATH`). The schema is created via
   astral calculation, sessions are bucketed relative to each day's sunrise,
   and the long-term profile is aggregated inside SQLite. Raw readings are
   never modified; this is purely a read-side view.
+- **Generation KPI strip**: a six-card strip under the live stat cards showing
+  Today / Yesterday / This Week / This Month / This Year / Lifetime energy in
+  kWh (values ≥ 1 MWh are shown as MWh). It is fetched on page load and
+  refreshed on the same cadence as the Daily Energy Log (every
+  `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
+  inverter wakes up from night mode.
 
 ## REST API
 
@@ -183,6 +189,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day (for the bar chart) |
+| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, `lifetime`. Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings; **lifetime** prefers the newest `E_Today`→`E_Total` counter reading and falls back to summing all day totals. Backs the dashboard's Generation KPI strip |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |

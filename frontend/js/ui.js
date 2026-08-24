@@ -1,7 +1,7 @@
 // Status pills, night banner, and stat-card DOM updates.
 // Pure DOM layer: no fetching, no sockets, no charts.
 
-import { fmt, fmtTime } from './format.js';
+import { fmt, fmtTime, fmtEnergy } from './format.js';
 import { setNightMode } from './state.js';
 
 const el = id => document.getElementById(id);
@@ -57,6 +57,23 @@ function dimStatCards(dim){
 
 function setLastUpdated(iso){
   lastUpdated.textContent = fmtTime(iso);
+}
+
+// ---------- Generation KPI strip ----------
+const GEN_SLOTS = [
+  ['genToday', 'today'],
+  ['genYesterday', 'yesterday'],
+  ['genWeek', 'this_week'],
+  ['genMonth', 'this_month'],
+  ['genYear', 'this_year'],
+  ['genLifetime', 'lifetime'],
+];
+
+function renderGenerationSummary(summary){
+  for(const [id, key] of GEN_SLOTS){
+    const parts = fmtEnergy(summary?.[key]);
+    el(id).innerHTML = parts ? parts[0] + unit(parts[1]) : '–';
+  }
 }
 
 // ---------- Inverter status card ----------
@@ -119,4 +136,5 @@ export {
   dimStatCards,
   setLastUpdated,
   setInverterStatus,
+  renderGenerationSummary,
 };

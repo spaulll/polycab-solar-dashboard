@@ -302,6 +302,61 @@ body{
 .stat-card:not(.dim) .stat-value{ transition: color 0.6s; }
 
 /* ==========================================================================
+   Generation KPI strip — day/week/month/year/lifetime energy totals
+   ========================================================================== */
+
+.gen-strip{
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.gen-card{
+  background: var(--panel-2);
+  padding: 10px 16px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gen-label{
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gen-value{
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: clamp(15px, 1.5vw, 19px);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-value.accent{ color: var(--accent); }
+
+.gen-value .unit{
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dim);
+  margin-left: 3px;
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
    Workspace layout
    ========================================================================== */
 
@@ -639,11 +694,13 @@ footer{
 @media (max-width: 1020px){
   .layout{ grid-template-columns: 1fr; }
   .stats{ grid-template-columns: repeat(3, 1fr); }
+  .gen-strip{ grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 620px){
   .wrap{ padding: 14px 12px 32px; }
   .stats{ grid-template-columns: repeat(2, 1fr); }
+  .gen-strip{ grid-template-columns: repeat(2, 1fr); }
   .rail-countdown{ margin-left: 0; }
   .chart-holder{ height: 250px; padding: 10px; }
   .topbar-right{ width: 100%; justify-content: flex-start; }

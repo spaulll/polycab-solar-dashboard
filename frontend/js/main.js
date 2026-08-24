@@ -4,11 +4,12 @@
 
 import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS } from './config.js';
 import { state, setRange } from './state.js';
-import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProduction, fetchDailySummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
+import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProduction, fetchDailySummary, fetchGenerationSummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
 import {
   setMode, setNightText, setConn, setConnText, NIGHT_TEXT_DEFAULT,
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
+  renderGenerationSummary,
 } from './ui.js';
 import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
@@ -38,6 +39,7 @@ const dayTimers = [];
 function startDayPolling(){
   if(dayTimers.length) return; // already running
   dayTimers.push(setInterval(loadDailySummary, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadGenerationSummary, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -119,6 +121,17 @@ async function loadDailySummary(){
   }
 }
 
+// Generation KPI strip: refreshed on the same cadence as the daily summary
+// (its "today" value comes from the live e_today counter server-side, so a
+// few minutes of staleness is fine for these totals).
+async function loadGenerationSummary(){
+  try{
+    renderGenerationSummary(await fetchGenerationSummary());
+  }catch(e){
+    console.error('Failed to load generation summary', e);
+  }
+}
+
 async function loadInitialStatus(){
   try{
     const json = await fetchStatus();
@@ -191,6 +204,7 @@ function handleWSMessage(msg){
     if(msg.status) setInverterStatus(msg.status, msg);
     // Fresh data after the long idle stretch, then resume the day cadence.
     loadDailySummary();
+    loadGenerationSummary();
     loadPowercutCount();
     startDayPolling();
   }
@@ -226,6 +240,7 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();
+  await loadGenerationSummary();
   await loadPowercutCount();
   connectWebSocket(handleWSMessage);
   // Daily summary + powercuts intervals follow day/night (see

@@ -450,6 +450,16 @@ async def api_daily_summary():
     return {"days": rows}
 
 
+@app.get("/api/generation/summary")
+async def api_generation_summary():
+    """
+    Generation KPI strip: kWh totals for today / yesterday / this week
+    (Monday-today) / this month / this year / lifetime, computed from
+    readings_daily + the live e_today / e_total counters.
+    """
+    return await asyncio.to_thread(database.get_generation_summary)
+
+
 @app.get("/api/db-status")
 async def api_db_status():
     """Database health: file size, row counts, last maintenance, retention."""

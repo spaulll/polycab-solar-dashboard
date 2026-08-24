@@ -836,6 +836,112 @@ def get_daily_summary() -> list[dict]:
     return rows
 
 
+def get_generation_summary() -> dict:
+    """
+    Generation KPIs in kWh:
+    today / yesterday / this_week / this_month / this_year / lifetime.
+
+    Sources, matching how the Daily Energy Log is built:
+    - Completed days come from readings_daily.energy_kwh (max e_today) plus
+      still-raw recent days grouped on the fly from `readings`.
+    - "today" always uses the LIVE max e_today since local midnight straight
+      from `readings`, so it reflects in-progress production even before any
+      daily aggregate exists.
+    - Week = Monday..today (ISO week); month/year boundaries are the local
+      calendar month/year start, computed with config.TIMEZONE. Day keys are
+      UTC dates; they coincide with local calendar days for every hour the
+      sun is up as long as daylight doesn't cross UTC midnight (true for the
+      intended IST-style deployments).
+    - Lifetime prefers the newest e_total reading (the inverter's own
+      cumulative counter) and falls back to summing all day totals.
+    """
+    tz = _local_tz()
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    today = now_local.date()
+
+    midnight_utc = now_local.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).astimezone(timezone.utc)
+
+    conn = _connect()
+    try:
+        # Live today value: max e_today seen since local midnight.
+        row = conn.execute(
+            """
+            SELECT MAX(e_today) AS kwh FROM readings
+            WHERE timestamp >= ? AND e_today IS NOT NULL
+            """,
+            (midnight_utc.isoformat(),),
+        ).fetchone()
+        today_kwh = row["kwh"] if row else None
+
+        # Lifetime: prefer the inverter's own cumulative counter.
+        row = conn.execute(
+            """
+            SELECT e_total FROM readings
+            WHERE e_total IS NOT NULL
+            ORDER BY timestamp DESC LIMIT 1
+            """
+        ).fetchone()
+        lifetime_kwh = row["e_total"] if row else None
+
+        # Completed-day totals (same series as get_daily_summary).
+        permanent = conn.execute(
+            "SELECT day, energy_kwh FROM readings_daily WHERE energy_kwh IS NOT NULL"
+        ).fetchall()
+        raw_days = conn.execute(
+            """
+            SELECT date(timestamp) AS day,
+                   MAX(e_today) AS energy_kwh
+            FROM readings
+            WHERE date(timestamp) NOT IN (SELECT day FROM readings_daily)
+              AND e_today IS NOT NULL
+            GROUP BY date(timestamp)
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    # Bucket day totals into the requested windows.
+    week_start = today - timedelta(days=today.weekday())   # Monday
+    month_start = today.replace(day=1)
+    year_start = today.replace(month=1, day=1)
+    yesterday = today - timedelta(days=1)
+
+    yesterday_kwh = 0.0
+    week_kwh = 0.0
+    month_kwh = 0.0
+    year_kwh = 0.0
+    days_sum = 0.0
+    for r in list(permanent) + list(raw_days):
+        try:
+            d = datetime.strptime(r["day"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        energy = r["energy_kwh"] or 0.0
+        days_sum += energy
+        if d == yesterday:
+            yesterday_kwh += energy
+        if week_start <= d <= today:
+            week_kwh += energy
+        if month_start <= d <= today:
+            month_kwh += energy
+        if year_start <= d <= today:
+            year_kwh += energy
+
+    def _round(value):
+        return round(value, 2) if value is not None else None
+
+    return {
+        "today": _round(today_kwh),
+        "yesterday": _round(yesterday_kwh),
+        "this_week": _round(week_kwh),
+        "this_month": _round(month_kwh),
+        "this_year": _round(year_kwh),
+        "lifetime": _round(lifetime_kwh if lifetime_kwh is not None else days_sum),
+    }
+
+
 # ---------------------------------------------------------------------------
 # DB status introspection
 # ---------------------------------------------------------------------------

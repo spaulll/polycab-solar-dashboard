@@ -25,4 +25,15 @@ function fmtDuration(totalSeconds){
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
-export { fmt, fmtTime, fmtClock, fmtDuration };
+// Energy in human units: kWh below 1 MWh, MWh above (lifetime totals).
+// Returns [value, unit] for callers that render the unit separately,
+// or null when there is no value to show.
+function fmtEnergy(kwh){
+  if(kwh === null || kwh === undefined || Number.isNaN(Number(kwh))) return null;
+  const n = Number(kwh);
+  return n >= 1000
+    ? [(n / 1000).toFixed(2), 'MWh']
+    : [n.toFixed(1), 'kWh'];
+}
+
+export { fmt, fmtTime, fmtClock, fmtDuration, fmtEnergy };
