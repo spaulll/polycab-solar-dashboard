@@ -153,6 +153,14 @@ body{
   flex-wrap: wrap;
 }
 
+/* Weather + theme stay glued together so they wrap as one unit on phones
+   instead of stranding the toggle alone on its own row. */
+.topbar-actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .updated{
   font-family: var(--mono);
   font-size: 11px;
@@ -459,7 +467,7 @@ body{
   min-width: 0;
 }
 
-.col-main{ display: grid; }
+.col-main{ display: grid; grid-template-columns: minmax(0, 1fr); }
 
 /* Sidebar stretches to the full height of the (taller) chart column and
    splits the slack equally between its three panels, so both columns
@@ -1063,15 +1071,55 @@ footer{
 @media (max-width: 1020px){
   .layout{ grid-template-columns: 1fr; }
   .stats{ grid-template-columns: repeat(3, 1fr); }
-  .gen-strip{ grid-template-columns: repeat(3, 1fr); }
+
+  /* Keep the desktop 5-up KPI row instead of 3-up: 5 cards can never fill
+     3 columns, and the leftover cell showed as a bare gap in the strip. */
+  .gen-strip{ grid-template-columns: repeat(5, 1fr); }
+  .gen-card{ padding: 12px 14px; }
   .gen-card.wide{ grid-column: 1 / -1; }
 }
 
 @media (max-width: 620px){
   .wrap{ padding: 14px 12px 32px; }
-  .stats{ grid-template-columns: repeat(2, 1fr); }
-  .gen-strip{ grid-template-columns: repeat(2, 1fr); }
+
+  /* --- Topbar: status cluster left, actions cluster right --- */
+  .topbar-right{ width: 100%; gap: 8px; }
+  .topbar-actions{ margin-left: auto; }
+
+  /* --- Sun rail: drop separators so wrapped rows never end on a "|" --- */
+  .sun-rail{ gap: 8px 18px; }
+  .rail-sep{ display: none; }
   .rail-countdown{ margin-left: 0; }
+
+  /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
+         longest realistic readings on one line at 320px --- */
+  .stats{ grid-template-columns: repeat(2, 1fr); }
+  .stat-card{ padding: 12px 14px; }
+  .stat-value{ font-size: 20px; }
+
+  /* --- Gen strip: 2-up with the 5th card (This Year) taking the full
+         row below, so no cell is ever empty; wide card follows full-width */
+  .gen-strip{ grid-template-columns: repeat(2, 1fr); }
+  .gen-card{ padding: 12px 14px; }
+  .gen-card:nth-child(5){ grid-column: 1 / -1; }
+
+  /* --- Comfortable touch targets --- */
+  .range-toggle button{ padding: 9px 14px; }
+  .btn{ padding: 8px 12px; }
+  select{ padding: 8px 26px 8px 10px; }
+  .date-range input[type="date"]{ padding: 8px; }
+  .weather-chip{ padding: 7px 12px; }
+  .theme-toggle{ width: 38px; height: 34px; }
+  .weather-close{ padding: 8px; }
+
   .chart-holder{ height: 250px; padding: 10px; }
-  .topbar-right{ width: 100%; justify-content: flex-start; }
+}
+
+/* Small phones (320–360px): trim card padding a touch more so the longest
+   labels and combo Grid V/A reading never clip. */
+@media (max-width: 360px){
+  .stat-card{ padding: 11px 12px; }
+  .stat-value{ font-size: 18px; }
+  .stat-value.combo{ font-size: 13px; }
+  .gen-card{ padding: 11px 12px; }
 }
