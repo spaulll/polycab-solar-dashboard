@@ -181,8 +181,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
   today's live reading) and Inverter Lifetime (secondary — the running total
   reported directly by the inverter). The two can differ slightly (partial
   days, reset timing, rounding, or data recorded before the dashboard
-  started); a footnote under the strip and a tooltip on the card explain
-  this. Values ≥ 1 MWh are shown as MWh. The strip is fetched on page load
+  started); hovering the card (or its `*`) shows a tooltip explaining this. Values ≥ 1 MWh are shown as MWh. The strip is fetched on page load
   and refreshed on the same cadence as the Daily Energy Log (every
   `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
   inverter wakes up from night mode.

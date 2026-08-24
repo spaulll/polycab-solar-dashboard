@@ -313,7 +313,7 @@ body{
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
 }
 
 .gen-card{
@@ -382,13 +382,9 @@ body{
 
 .gen-alt .asterisk{ color: var(--accent); margin-left: 2px; }
 
-/* Footnote explaining the calculated-vs-inverter gap. */
-.gen-note{
-  margin: 0 2px 20px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--faint);
-}
+/* Explanation of the calculated-vs-inverter gap lives in the card's native
+   tooltip (title attribute); the cursor hints it's hoverable. */
+.gen-card.wide{ cursor: help; }
 
 /* ==========================================================================
    Workspace layout
