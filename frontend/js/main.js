@@ -15,6 +15,7 @@ import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDa
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
+import { initWeather } from './weather.js';
 
 // ---------- Powercuts counter ----------
 let pcRange = 'today';
@@ -269,4 +270,6 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   // full refresh from the server to stay accurate over long sessions.
   startSunTicker();
   setInterval(refreshSunInfo, SUN_INFO_REFRESH_MS);
+  // Weather chip: independent fixed schedule (server caches provider calls).
+  initWeather();
 })();

@@ -27,6 +27,9 @@ const POWERCUTS_REFRESH_MS = 60 * 1000;
 const SUN_INFO_REFRESH_MS = 5 * 60 * 1000;
 const SUN_COUNTDOWN_TICK_MS = 1000;
 
+// Weather refresh cadence (backend caches server-side too).
+const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+
 export {
   API_BASE,
   WS_URL,
@@ -39,4 +42,5 @@ export {
   POWERCUTS_REFRESH_MS,
   SUN_INFO_REFRESH_MS,
   SUN_COUNTDOWN_TICK_MS,
+  WEATHER_REFRESH_MS,
 };

@@ -22,7 +22,7 @@ import json
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +31,7 @@ import config
 import database
 import inverter
 import solar
+import weather
 
 
 # ---------------------------------------------------------------------------
@@ -538,6 +539,20 @@ async def api_powercuts(
 async def api_sun():
     """Next sunrise/sunset times and countdowns for the configured location."""
     return await asyncio.to_thread(inverter.get_sun_info)
+
+
+@app.get("/api/weather")
+async def api_weather():
+    """
+    Current weather + a short forecast for the configured location, from a
+    normalized provider chain: OpenWeatherMap when OPENWEATHER_API_KEY is
+    set (primary), otherwise/automatically Open-Meteo (no key). Cached
+    server-side for a few minutes. 502 when every provider fails.
+    """
+    try:
+        return await asyncio.to_thread(weather.get_weather)
+    except weather.WeatherUnavailableError as e:
+        raise HTTPException(status_code=502, detail=f"Weather unavailable: {e}")
 
 
 # ---------------------------------------------------------------------------

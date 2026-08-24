@@ -65,6 +65,11 @@ function fetchPowercutCount(range){
   return getJSON(`/api/powercuts?range=${range}`).then(json => json.count ?? 0);
 }
 
+// Normalized weather from the backend (OpenWeatherMap or Open-Meteo).
+function fetchWeather(){
+  return getJSON('/api/weather');
+}
+
 function csvExportURL(range){
   return `${API_BASE}/api/export?range=${range}`;
 }
@@ -80,5 +85,6 @@ export {
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,
+  fetchWeather,
   csvExportURL,
 };

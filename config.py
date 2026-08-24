@@ -88,6 +88,12 @@ TIMEZONE: str = os.environ.get("TIMEZONE", "Asia/Kolkata")
 LATITUDE: float = _env_float("LATITUDE", 28.6139)
 LONGITUDE: float = _env_float("LONGITUDE", 77.2090)
 
+# --- Weather ---
+# Optional OpenWeatherMap API key (https://openweathermap.org/api). When set
+# it is used as the primary provider for /api/weather; when missing or empty
+# the dashboard falls back to Open-Meteo, which needs no key at all.
+OPENWEATHER_API_KEY: str = os.environ.get("OPENWEATHER_API_KEY", "").strip()
+
 # --- Server ---
 HOST: str = os.environ.get("HOST", "0.0.0.0")
 PORT: int = _env_int("PORT", 8000)

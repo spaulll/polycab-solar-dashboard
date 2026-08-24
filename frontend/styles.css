@@ -746,6 +746,176 @@ footer{
 }
 
 /* ==========================================================================
+   Weather chip (top bar) + popup card
+   ========================================================================== */
+
+.weather-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.weather-chip:hover{
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+}
+
+.weather-chip.unavailable{
+  color: var(--faint);
+  cursor: default;
+}
+
+.weather-icon svg,
+.weather-card-icon svg,
+.wf-icon svg{
+  display: block;
+}
+
+.weather-icon svg{ width: 17px; height: 17px; color: var(--accent); }
+.weather-chip.unavailable .weather-icon svg{ color: var(--faint); }
+
+/* --- Overlay: dim + blur behind the popup card --- */
+.weather-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 16px 16px;
+  background: rgba(8, 9, 11, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.weather-overlay.open{ opacity: 1; }
+
+/* Explicit display above would beat [hidden]; restore it. */
+.weather-overlay[hidden]{ display: none; }
+
+.weather-card{
+  position: relative;
+  width: 340px;
+  max-width: 100%;
+  padding: 18px 18px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  transform: scale(0.96) translateY(-6px);
+  transition: transform 0.2s ease;
+}
+
+.weather-overlay.open .weather-card{ transform: scale(1) translateY(0); }
+
+.weather-close{
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.weather-close:hover{ color: var(--text); }
+
+.weather-card-head{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.weather-card-icon svg{ width: 38px; height: 38px; color: var(--accent); }
+
+.weather-card-temp{
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.weather-card-condition{
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.weather-meta{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.weather-meta dt{
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.weather-meta dd{
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.weather-forecast{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+.wf-item{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.wf-time{ font-family: var(--mono); font-size: 10px; color: var(--faint); }
+.wf-icon svg{ width: 20px; height: 20px; color: var(--dim); }
+.wf-pop{ font-size: 9px; color: var(--steel); min-height: 11px; }
+
+.wf-temp{ font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+.wf-empty{
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.weather-provider{
+  margin: 12px 0 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  text-align: right;
+}
+
+/* ==========================================================================
    Responsive — desktop first, still usable on phone
    ========================================================================== */
 

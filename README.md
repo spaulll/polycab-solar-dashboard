@@ -110,6 +110,10 @@ Set at minimum `INVERTER_IP` and your location (`CITY`, `COUNTRY`, `TIMEZONE`,
 `LATITUDE`, `LONGITUDE` -- used for sunrise/sunset night-mode timing). See
 `.env.example` for the full list of options and their defaults.
 
+`OPENWEATHER_API_KEY` is optional: when set, OpenWeatherMap is used as the
+primary weather provider for the top bar; when missing or empty, the
+dashboard automatically uses **Open-Meteo**, which requires no key at all.
+
 `.env` is gitignored and never committed -- keep your real inverter IP and
 home coordinates out of version control. `config.py` itself only contains
 generic placeholder defaults, safe to publish as-is.
@@ -198,6 +202,18 @@ directory (path controlled by `DB_PATH`). The schema is created via
   `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
   inverter wakes up from night mode.
 
+- **Weather chip** (`weather.py` + `frontend/js/weather.js`): a small
+  icon+temperature chip in the top bar — no permanent weather card. Clicking
+  it opens a popup (with a dimmed, backdrop-blurred background; click the
+  backdrop, the × button, or Escape to close) showing current conditions,
+  feels-like/humidity/wind/cloud cover, today's high/low, rain chance and a
+  compact multi-hour forecast, with a small note of which provider answered.
+  The backend tries OpenWeatherMap first when `OPENWEATHER_API_KEY` is set,
+  otherwise falls back to Open-Meteo (no key needed) automatically, caches
+  results for 15 minutes, and maps both providers' codes onto one shared icon
+  set. If weather is unavailable the chip shows a grayed-out `–°` and the
+  popup stays disabled.
+
 ## REST API
 
 | Endpoint | Description |
@@ -212,6 +228,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
 | `GET /api/sun` | Next sunrise/sunset times and countdowns |
+| `GET /api/weather` | Current weather + a short forecast for the configured location, in a provider-agnostic normalized shape (`provider`, `temp`, `feels_like`, `humidity`, `wind_speed`, `condition`, `icon`, `cloud_cover`, `pop`, `high`/`low`, `forecast[]`). **Primary:** OpenWeatherMap (only when `OPENWEATHER_API_KEY` is set); **fallback:** Open-Meteo — no key required, used automatically whenever OWM is unconfigured or fails. Cached in-memory for 15 minutes. Returns `502 {"detail": ...}` when every provider fails |
 | `WS /ws` | Live reading/status broadcast |
 
 ## Notes
