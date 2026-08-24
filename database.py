@@ -839,7 +839,8 @@ def get_daily_summary() -> list[dict]:
 def get_generation_summary() -> dict:
     """
     Generation KPIs in kWh:
-    today / yesterday / this_week / this_month / this_year / lifetime.
+    today / yesterday / this_week / this_month / this_year, plus two
+    lifetime figures shown side by side in the UI.
 
     Sources, matching how the Daily Energy Log is built:
     - Completed days come from readings_daily.energy_kwh (max e_today) plus
@@ -852,8 +853,14 @@ def get_generation_summary() -> dict:
       UTC dates; they coincide with local calendar days for every hour the
       sun is up as long as daylight doesn't cross UTC midnight (true for the
       intended IST-style deployments).
-    - Lifetime prefers the newest e_total reading (the inverter's own
-      cumulative counter) and falls back to summing all day totals.
+    - calculated_total sums every stored day total; the on-the-fly grouping
+      of the current day contributes its live max e_today, so no separate
+      addition is needed. It is the dashboard's own bookkeeping view.
+    - inverter_lifetime is the newest e_total reading -- the running total
+      reported directly by the inverter. The two lifetime figures can differ
+      slightly (partial days, counter reset timing, rounding, data recorded
+      before the dashboard existed); both are exposed so the UI can show
+      that gap honestly instead of hiding it.
     """
     tz = _local_tz()
     now_local = datetime.now(timezone.utc).astimezone(tz)
@@ -938,7 +945,11 @@ def get_generation_summary() -> dict:
         "this_week": _round(week_kwh),
         "this_month": _round(month_kwh),
         "this_year": _round(year_kwh),
-        "lifetime": _round(lifetime_kwh if lifetime_kwh is not None else days_sum),
+        # Dashboard bookkeeping: all stored day totals (today's live value is
+        # included via the on-the-fly grouping of the current day).
+        "calculated_total": _round(days_sum),
+        # The inverter's own running counter, straight from the newest read.
+        "inverter_lifetime": _round(lifetime_kwh),
     }
 
 

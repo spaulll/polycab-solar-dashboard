@@ -175,9 +175,15 @@ directory (path controlled by `DB_PATH`). The schema is created via
   and the long-term profile is aggregated inside SQLite. Raw readings are
   never modified; this is purely a read-side view.
 - **Generation KPI strip**: a six-card strip under the live stat cards showing
-  Today / Yesterday / This Week / This Month / This Year / Lifetime energy in
-  kWh (values ≥ 1 MWh are shown as MWh). It is fetched on page load and
-  refreshed on the same cadence as the Daily Energy Log (every
+  Today / Yesterday / This Week / This Month / This Year, plus a wider
+  Lifetime card that shows **both** lifetime figures: Calculated Production
+  (primary — the sum of daily totals stored in this dashboard, including
+  today's live reading) and Inverter Lifetime (secondary — the running total
+  reported directly by the inverter). The two can differ slightly (partial
+  days, reset timing, rounding, or data recorded before the dashboard
+  started); a footnote under the strip and a tooltip on the card explain
+  this. Values ≥ 1 MWh are shown as MWh. The strip is fetched on page load
+  and refreshed on the same cadence as the Daily Energy Log (every
   `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
   inverter wakes up from night mode.
 
@@ -189,7 +195,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day (for the bar chart) |
-| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, `lifetime`. Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings; **lifetime** prefers the newest `E_Today`→`E_Total` counter reading and falls back to summing all day totals. Backs the dashboard's Generation KPI strip |
+| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Backs the dashboard's Generation KPI strip |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |

@@ -307,13 +307,13 @@ body{
 
 .gen-strip{
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr) minmax(0, 1.75fr);
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .gen-card{
@@ -354,6 +354,40 @@ body{
   color: var(--dim);
   margin-left: 3px;
   letter-spacing: 0.04em;
+}
+
+/* Secondary line inside the wide lifetime card: the inverter's own counter
+   under the (primary) calculated total. */
+.gen-alt{
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-alt-label{
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-right: 7px;
+}
+
+.gen-alt .asterisk{ color: var(--accent); margin-left: 2px; }
+
+/* Footnote explaining the calculated-vs-inverter gap. */
+.gen-note{
+  margin: 0 2px 20px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
 }
 
 /* ==========================================================================
@@ -695,6 +729,7 @@ footer{
   .layout{ grid-template-columns: 1fr; }
   .stats{ grid-template-columns: repeat(3, 1fr); }
   .gen-strip{ grid-template-columns: repeat(3, 1fr); }
+  .gen-card.wide{ grid-column: 1 / -1; }
 }
 
 @media (max-width: 620px){

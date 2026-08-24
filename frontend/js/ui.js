@@ -66,7 +66,6 @@ const GEN_SLOTS = [
   ['genWeek', 'this_week'],
   ['genMonth', 'this_month'],
   ['genYear', 'this_year'],
-  ['genLifetime', 'lifetime'],
 ];
 
 function renderGenerationSummary(summary){
@@ -74,6 +73,12 @@ function renderGenerationSummary(summary){
     const parts = fmtEnergy(summary?.[key]);
     el(id).innerHTML = parts ? parts[0] + unit(parts[1]) : '–';
   }
+  // Wide card: calculated total is primary, the inverter's own counter sits
+  // below it as a secondary line (the * links to the note under the strip).
+  const calc = fmtEnergy(summary?.calculated_total);
+  el('genCalculated').innerHTML = calc ? calc[0] + unit(calc[1]) : '–';
+  const inv = fmtEnergy(summary?.inverter_lifetime);
+  el('genInverterLifetime').innerHTML = inv ? inv[0] + unit(inv[1]) : '–';
 }
 
 // ---------- Inverter status card ----------

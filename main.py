@@ -454,8 +454,9 @@ async def api_daily_summary():
 async def api_generation_summary():
     """
     Generation KPI strip: kWh totals for today / yesterday / this week
-    (Monday-today) / this month / this year / lifetime, computed from
-    readings_daily + the live e_today / e_total counters.
+    (Monday-today) / this month / this year, plus both lifetime figures --
+    `calculated_total` (sum of stored daily energy) and `inverter_lifetime`
+    (the inverter's own e_total counter), which can differ slightly.
     """
     return await asyncio.to_thread(database.get_generation_summary)
 
