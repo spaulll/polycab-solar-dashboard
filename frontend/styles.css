@@ -4,6 +4,8 @@
    ========================================================================== */
 
 :root{
+  color-scheme: dark;
+
   /* Surfaces */
   --bg: #101113;
   --panel: #15171a;
@@ -27,11 +29,51 @@
   --err: #cf6a5c;
   --night: #8b93c2;
 
+  /* Scrims & shadows (overlays, chart empty-state wash) */
+  --scrim-panel: rgba(21, 23, 26, 0.72);
+  --scrim-overlay: rgba(8, 9, 11, 0.45);
+  --shadow-card: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --shadow-panel: none;
+
   /* Type */
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
 
   --radius: 6px;
+}
+
+/* Light theme — same instrument language on paper-white surfaces.
+   Panels sit pure-white on a cool gray page with firm hairlines so cards
+   read as distinct instruments rather than a wash. */
+[data-theme="light"]{
+  color-scheme: light;
+
+  --bg: #eef0f3;
+  --panel: #ffffff;
+  --panel-2: #f2f4f6;
+  --line: #ccd1d7;
+  --line-strong: #b0b5bc;
+
+  --text: #1a1d21;
+  --dim: #4b525b;
+  --faint: #737a85;
+
+  --accent: #c8872e;
+  --accent-dim: rgba(200, 135, 46, 0.12);
+  --accent-line: rgba(200, 135, 46, 0.5);
+
+  --steel: #5f7992;
+  --ok: #2f855a;
+  --err: #bf4a3c;
+  --night: #5563ab;
+
+  --scrim-panel: rgba(255, 255, 255, 0.75);
+  --scrim-overlay: rgba(35, 38, 43, 0.28);
+  --shadow-card: 0 18px 50px rgba(35, 38, 43, 0.18);
+
+  /* Minimal lift so panels separate from the page without Material-style
+     elevation; dark keeps none. */
+  --shadow-panel: 0 1px 2px rgba(20, 24, 30, 0.05), 0 1px 3px rgba(20, 24, 30, 0.04);
 }
 
 *{ box-sizing: border-box; }
@@ -45,6 +87,7 @@ body{
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .wrap{
@@ -198,6 +241,7 @@ body{
   border-left: 3px solid var(--night);
   border-radius: var(--radius);
   background: var(--panel);
+  box-shadow: var(--shadow-panel);
   color: var(--dim);
   font-size: 13px;
   padding: 10px 14px;
@@ -224,6 +268,7 @@ body{
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
   overflow: hidden;
   margin-bottom: 20px;
 }
@@ -312,6 +357,7 @@ body{
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
   overflow: hidden;
   margin-bottom: 20px;
 }
@@ -412,6 +458,7 @@ body{
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-head{
@@ -537,8 +584,13 @@ select{
 
 select:hover{ color: var(--text); }
 
-/* Date-range pair in the Average Daily Yield panel head; color-scheme so
-   the native picker icon/text match the dark theme. */
+[data-theme="light"] select{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%234b525b' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* Date-range pair in the Average Daily Yield panel head; color-scheme is
+   inherited from :root / [data-theme] so the native picker icon and text
+   match the active theme. */
 .date-range{
   display: inline-flex;
   align-items: center;
@@ -554,7 +606,6 @@ select:hover{ color: var(--text); }
   font-family: var(--mono);
   font-size: 11px;
   padding: 5px 8px;
-  color-scheme: dark;
 }
 
 .date-range input[type="date"]:hover{ color: var(--text); }
@@ -579,6 +630,12 @@ select:hover{ color: var(--text); }
   height: 220px;
 }
 
+/* Light mode: faint cool tint defines the chart area against the white
+   panel; dark keeps the panel surface. */
+[data-theme="light"] .chart-holder{
+  background: #f7f8fa;
+}
+
 .chart-msg{
   display: none;
   position: absolute;
@@ -589,7 +646,7 @@ select:hover{ color: var(--text); }
   color: var(--faint);
   text-align: center;
   padding: 20px;
-  background: rgba(21, 23, 26, 0.72);
+  background: var(--scrim-panel);
 }
 
 .chart-msg.show{ display: grid; }
@@ -792,7 +849,7 @@ footer{
   align-items: flex-start;
   justify-content: center;
   padding: 96px 16px 16px;
-  background: rgba(8, 9, 11, 0.45);
+  background: var(--scrim-overlay);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   opacity: 0;
@@ -812,7 +869,7 @@ footer{
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-card);
   transform: scale(0.96) translateY(-6px);
   transition: transform 0.2s ease;
 }
@@ -913,6 +970,54 @@ footer{
   font-size: 10px;
   color: var(--faint);
   text-align: right;
+}
+
+/* ==========================================================================
+    Theme toggle — sun/moon cross-fade with a short rotation
+    ========================================================================== */
+
+.theme-toggle{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.25s ease, color 0.25s ease;
+}
+
+.theme-toggle:hover{ border-color: var(--line-strong); }
+
+.theme-toggle:focus-visible{
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+.theme-toggle svg{
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* Dark mode shows the moon; light mode shows the sun. The outgoing icon
+   rotates and shrinks while fading for a compact morph feel. */
+[data-theme="dark"] .theme-icon-sun,
+[data-theme="light"] .theme-icon-moon{
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.4);
+}
+
+[data-theme="dark"] .theme-icon-moon,
+[data-theme="light"] .theme-icon-sun{
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
 /* ==========================================================================

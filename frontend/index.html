@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Solar Dashboard</title>
+<script>
+  // Apply the theme before the stylesheet loads so there is no dark flash.
+  // Stored choice wins; otherwise follow the system preference.
+  (function(){
+    var t = null;
+    try { t = localStorage.getItem('theme'); } catch(e){}
+    if(t !== 'light' && t !== 'dark'){
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
@@ -48,6 +60,26 @@
               aria-haspopup="dialog" aria-expanded="false">
         <span class="weather-icon" id="weatherIcon"></span>
         <span class="weather-temp" id="weatherTemp">–°</span>
+      </button>
+      <button class="theme-toggle" id="themeToggle" type="button"
+              aria-label="Switch to light mode" title="Toggle theme">
+        <svg class="theme-icon-sun" viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="3.6" fill="currentColor"/>
+          <g stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+            <line x1="10" y1="1.5" x2="10" y2="3.8"/>
+            <line x1="10" y1="16.2" x2="10" y2="18.5"/>
+            <line x1="1.5" y1="10" x2="3.8" y2="10"/>
+            <line x1="16.2" y1="10" x2="18.5" y2="10"/>
+            <line x1="3.9" y1="3.9" x2="5.5" y2="5.5"/>
+            <line x1="14.5" y1="14.5" x2="16.1" y2="16.1"/>
+            <line x1="3.9" y1="16.1" x2="5.5" y2="14.5"/>
+            <line x1="14.5" y1="5.5" x2="16.1" y2="3.9"/>
+          </g>
+        </svg>
+        <svg class="theme-icon-moon" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M15.5 12.6A6.8 6.8 0 0 1 7.4 4.5 6.8 6.8 0 1 0 15.5 12.6z"
+                fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
       </button>
     </div>
   </header>
@@ -301,7 +333,7 @@
 
   </main>
 
-  <footer>solar-dashboard · local network only · no external dependencies</footer>
+  <footer>Solar Dashboard · Made with ❤️ & AI</footer>
 </div>
 
 <!-- ================= Weather popup ================= -->

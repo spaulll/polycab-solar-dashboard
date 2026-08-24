@@ -16,6 +16,8 @@ import { computeInsights, renderPeakInsight } from './insights.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
+import { initTheme } from './theme.js';
+import { applyChartTheme } from './charts.js';
 
 // ---------- Powercuts counter ----------
 let pcRange = 'today';
@@ -253,6 +255,8 @@ document.getElementById('csvBtn').addEventListener('click', () => {
 
 // ---------- Boot ----------
 (async function init(){
+  // Theme first: charts read the active palette at creation and on change.
+  initTheme(applyChartTheme);
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();

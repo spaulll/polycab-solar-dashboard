@@ -25,13 +25,43 @@ const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
 const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
 const rgba = (rgb, a) => `rgba(${rgb},${a})`;
 
-// ---------- Chart.js defaults (dark instrument theme) ----------
-Chart.defaults.color = '#9aa1a9';
-Chart.defaults.font.family = "ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
-Chart.defaults.font.size = 11;
+// Chart palette per dashboard theme; matches styles.css variables.
+const CHART_THEMES = {
+  dark: {
+    text: '#9aa1a9',
+    grid: 'rgba(233,231,226,0.06)',
+    axisTitle: '#5f666e',
+    tooltipBg: '#191c20',
+    tooltipBorder: '#34383f',
+    tooltipTitle: '#e9e7e2',
+    tooltipBody: '#9aa1a9',
+    dayLine: 'rgba(233,231,226,0.12)',
+    dayLabel: '#9aa1a9',
+  },
+  light: {
+    text: '#4b525b',
+    grid: 'rgba(35,38,43,0.14)',
+    axisTitle: '#737a85',
+    tooltipBg: '#ffffff',
+    tooltipBorder: '#b0b5bc',
+    tooltipTitle: '#1a1d21',
+    tooltipBody: '#4b525b',
+    dayLine: 'rgba(35,38,43,0.22)',
+    dayLabel: '#4b525b',
+  },
+};
 
-const gridColor = 'rgba(233,231,226,0.06)';
-const axisTitleColor = '#5f666e';
+// Mutable so applyChartTheme() can re-point every consumer (renderers read
+// them again per view rebuild; the plugin hooks read them per draw).
+let themeColors = CHART_THEMES.dark;
+
+// ---------- Chart.js defaults ----------
+function setChartDefaults(c){
+  Chart.defaults.color = c.text;
+  Chart.defaults.font.family = "ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
+  Chart.defaults.font.size = 11;
+}
+setChartDefaults(themeColors);
 
 let powerMode = 'rolling';   // rolling | today | sessions | profile
 
@@ -52,7 +82,7 @@ const sessionDayLines = {
     const xs = chart.scales.x;
     if(!xs) return;
     ctx.save();
-    ctx.strokeStyle = 'rgba(233,231,226,0.12)';
+    ctx.strokeStyle = themeColors.dayLine;
     ctx.setLineDash([3, 3]);
     ctx.lineWidth = 1;
     for(const m of marks){
@@ -72,7 +102,7 @@ const sessionDayLines = {
     const xs = chart.scales.x;
     if(!xs) return;
     ctx.save();
-    ctx.fillStyle = '#9aa1a9';
+    ctx.fillStyle = themeColors.dayLabel;
     ctx.font = '10px ' + Chart.defaults.font.family;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -132,8 +162,8 @@ const powerChart = new Chart(el('powerChart').getContext('2d'), {
       y: {
         beginAtZero: true,
         grace: '8%',
-        grid: { color: gridColor, drawTicks: false },
-        title: { display: true, text: 'Watts', color: axisTitleColor, font:{size:10} },
+        grid: { color: themeColors.grid, drawTicks: false },
+        title: { display: true, text: 'Watts', color: themeColors.axisTitle, font:{size:10} },
       }
     }
   }
@@ -152,7 +182,7 @@ function timeAxisConfig({ unit, stepSize, tooltipFormat, min, max } = {}){
     min: min ?? undefined,
     max: max ?? undefined,
     time: { unit, stepSize, tooltipFormat },
-    grid: { color: gridColor, drawTicks: false },
+    grid: { color: themeColors.grid, drawTicks: false },
     ticks: { maxRotation: 0, autoSkipPadding: 20 },
   };
 }
@@ -170,13 +200,13 @@ function solarAxisConfig(maxSeconds){
     type: 'linear',
     min: 0,
     max: Math.max(3600, Math.ceil((maxSeconds || 12 * 3600) / 3600) * 3600),
-    grid: { color: gridColor, drawTicks: false },
+    grid: { color: themeColors.grid, drawTicks: false },
     ticks: {
       maxRotation: 0,
       stepSize: 2 * 3600,
       callback: v => '+' + solarClock(v),
     },
-    title: { display: true, text: 'time after sunrise', color: axisTitleColor, font:{size:10} },
+    title: { display: true, text: 'time after sunrise', color: themeColors.axisTitle, font:{size:10} },
   };
 }
 
@@ -584,7 +614,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
     plugins: { legend: { display: false } },
     scales: {
       x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
-      y: { beginAtZero: true, grid: { color: gridColor }, title:{display:true,text:'kWh',color:axisTitleColor,font:{size:10}} }
+      y: { beginAtZero: true, grid: { color: themeColors.grid }, title:{display:true,text:'kWh',color:themeColors.axisTitle,font:{size:10}} }
     }
   }
 });
@@ -645,8 +675,8 @@ const cumulativeChart = new Chart(el('cumulativeChart').getContext('2d'), {
     },
     scales: {
       x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
-      y: { beginAtZero: true, grid: { color: gridColor },
-           title:{display:true,text:'Cumulative kWh',color:axisTitleColor,font:{size:10}} }
+      y: { beginAtZero: true, grid: { color: themeColors.grid },
+           title:{display:true,text:'Cumulative kWh',color:themeColors.axisTitle,font:{size:10}} }
     }
   }
 });
@@ -674,4 +704,35 @@ function setCumulativeRange(range){
   renderCumulative();
 }
 
-export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange };
+// ---------- Theme switching ----------
+// Re-points every hardcoded canvas color and refreshes the live chart
+// instances without animation so grids/axes/tooltips/legends follow the
+// dashboard theme immediately.
+function applyChartTheme(themeName){
+  const c = CHART_THEMES[themeName] ?? CHART_THEMES.dark;
+  themeColors = c;
+  setChartDefaults(c);
+
+  const tooltip = {
+    backgroundColor: c.tooltipBg,
+    borderColor: c.tooltipBorder,
+    borderWidth: 1,
+    titleColor: c.tooltipTitle,
+    bodyColor: c.tooltipBody,
+    padding: 10,
+  };
+  // Spread keeps each chart's existing callbacks (power's are swapped per
+  // view; cumulative owns fixed ones).
+  Object.assign(powerChart.options.plugins.tooltip, tooltip);
+  Object.assign(cumulativeChart.options.plugins.tooltip, tooltip);
+
+  for(const chart of [powerChart, dailyChart, cumulativeChart]){
+    for(const scale of Object.values(chart.options.scales)){
+      if(scale.grid) scale.grid.color = c.grid;
+      if(scale.title?.color) scale.title.color = c.axisTitle;
+    }
+    chart.update('none');
+  }
+}
+
+export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, applyChartTheme };
