@@ -11,7 +11,7 @@ import {
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
   renderGenerationSummary,
 } from './ui.js';
-import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary } from './charts.js';
+import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 
@@ -115,7 +115,11 @@ async function loadPeakProduction(){
 
 async function loadDailySummary(){
   try{
-    renderDailySummary(await fetchDailySummary());
+    const days = await fetchDailySummary();
+    renderDailySummary(days);
+    // Same aggregated series feeds the cumulative running-total chart; the
+    // extra work is one client-side pass over a few hundred points.
+    renderCumulative(days);
   }catch(e){
     console.error('Failed to load daily summary', e);
   }
@@ -229,6 +233,14 @@ document.getElementById('rangeToggle').addEventListener('click', (e) => {
   btn.classList.add('active');
   setRange(btn.dataset.range);
   loadHistory();
+});
+
+document.getElementById('cumRangeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-range]');
+  if(!btn) return;
+  document.querySelectorAll('#cumRangeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  setCumulativeRange(btn.dataset.range);
 });
 
 document.getElementById('csvBtn').addEventListener('click', () => {

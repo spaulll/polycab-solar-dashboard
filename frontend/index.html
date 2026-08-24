@@ -186,6 +186,21 @@
         </div>
       </div>
 
+      <!-- Cumulative energy curve -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Cumulative Energy</h3>
+          <div class="range-toggle" id="cumRangeToggle">
+            <button data-range="30d">30D</button>
+            <button data-range="90d">90D</button>
+            <button data-range="all" class="active">All</button>
+          </div>
+        </div>
+        <div class="chart-holder small">
+          <canvas id="cumulativeChart"></canvas>
+        </div>
+      </div>
+
     </section>
 
     <aside class="col-side">

@@ -1,7 +1,8 @@
 # Solar Dashboard
 
 A local web dashboard for a Modbus TCP solar inverter: live stats via WebSocket,
-historical charts, daily energy log, and CSV export. Built for a single home
+historical charts, daily energy log with a cumulative running-total view, and
+CSV export. Built for a single home
 network — no auth, no HTTPS, no rate limiting, CORS wide open (`*`) on purpose.
 
 Built and iterated with [Claude](https://claude.ai) as a hobby project.
@@ -76,7 +77,7 @@ solar-dashboard/
     │   ├── state.js          # Tiny shared state (selected range, night mode)
     │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
-    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending
+    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, daily bar + cumulative energy charts
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
     │   ├── ui.js             # Status pills, night banner, stat cards
@@ -193,7 +194,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history?range=1h\|today\|24h\|7d\|all` | Raw readings in the given range. `today` returns the current solar day (sunrise → now) plus its `sun` window so charts can be bounded correctly; `24h` remains a rolling window for compatibility |
 | `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
-| `GET /api/daily-summary` | Max `E_Today` per calendar day (for the bar chart) |
+| `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
 | `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Backs the dashboard's Generation KPI strip |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
@@ -218,5 +219,12 @@ directory (path controlled by `DB_PATH`). The schema is created via
   and `All` shows a long-term average power profile over position within the
   solar day (aggregated server-side). The Daily Energy Log remains the
   date → kWh totals chart.
+- **Cumulative Energy chart**: directly below the Daily Energy Log, a line
+  chart of the running total of daily kWh (X-axis = date, Y-axis = cumulative
+  kWh). It reuses the same aggregated per-day series as the bar chart — no
+  extra backend query — with the running total accumulated client-side in one
+  pass. A 30D / 90D / All toggle slices the series (All is the default); it
+  refreshes on the same cadence as the Daily Energy Log and immediately after
+  night mode ends.
 - To reset all history, stop the server and delete the SQLite file (`solar_data.db`
   by default).

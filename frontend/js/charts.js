@@ -595,4 +595,83 @@ function renderDailySummary(days){
   dailyChart.update();
 }
 
-export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary };
+// ---------- Cumulative Energy (running total of daily kWh) ----------
+// Reuses the same aggregated per-day series as the Daily Energy Log
+// (/api/daily-summary, ordered ascending); the running total is computed
+// client-side -- one pass over at most a few hundred points.
+const CUMULATIVE_RANGE_DAYS = { '30d': 30, '90d': 90 };
+let cumulativeRange = 'all';
+let latestDailyDays = [];
+
+const cumulativeChart = new Chart(el('cumulativeChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'Cumulative Energy (kWh)',
+      data: [],
+      borderColor: rgba(SOLAR_RGB, 0.9),
+      backgroundColor: rgba(SOLAR_RGB, 0.08),
+      borderWidth: 1.8,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      fill: true,
+      tension: 0.25,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 150 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#191c20',
+        borderColor: '#34383f',
+        borderWidth: 1,
+        titleColor: '#e9e7e2',
+        bodyColor: '#9aa1a9',
+        padding: 10,
+        callbacks: {
+          title: items => fmtDayLabel(items[0]?.label ?? ''),
+          label: item => {
+            const day = item.raw?.dayKwh;
+            return ` Total: ${fmt(item.parsed.y, 1)} kWh` +
+              (day !== undefined ? ` (+${fmt(day, 1)} that day)` : '');
+          },
+        }
+      }
+    },
+    scales: {
+      x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
+      y: { beginAtZero: true, grid: { color: gridColor },
+           title:{display:true,text:'Cumulative kWh',color:axisTitleColor,font:{size:10}} }
+    }
+  }
+});
+
+function renderCumulative(days){
+  if(days) latestDailyDays = days;
+  const sliced = cumulativeRange === 'all'
+    ? latestDailyDays
+    : latestDailyDays.slice(-CUMULATIVE_RANGE_DAYS[cumulativeRange]);
+
+  let total = 0;
+  const points = sliced.map(d => {
+    total += d.energy_kwh || 0;
+    return { x: d.day, y: total, dayKwh: d.energy_kwh };
+  });
+
+  cumulativeChart.data.labels = sliced.map(d => d.day);
+  cumulativeChart.data.datasets[0].data = points;
+  cumulativeChart.update();
+}
+
+function setCumulativeRange(range){
+  if(!(range === 'all' || CUMULATIVE_RANGE_DAYS[range])) return;
+  cumulativeRange = range;
+  renderCumulative();
+}
+
+export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange };
