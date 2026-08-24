@@ -2,16 +2,16 @@
 // and starts the periodic refreshes. All other modules are plain imports
 // with no knowledge of this wiring.
 
-import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS } from './config.js';
+import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS, MONTHLY_ALL_MONTHS } from './config.js';
 import { state, setRange } from './state.js';
-import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProduction, fetchDailySummary, fetchGenerationSummary, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
+import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProduction, fetchDailySummary, fetchGenerationSummary, fetchGenerationMonthly, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
 import {
   setMode, setNightText, setConn, setConnText, NIGHT_TEXT_DEFAULT,
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
   renderGenerationSummary,
 } from './ui.js';
-import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange } from './charts.js';
+import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
@@ -47,6 +47,7 @@ function startDayPolling(){
   dayTimers.push(setInterval(loadGenerationSummary, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadImpact, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadYieldStats, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadMonthlyEnergy, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -143,6 +144,19 @@ async function loadGenerationSummary(){
   }
 }
 
+// Monthly Energy: one request for the full month series; the 12/24/All
+// toggle slices client-side without refetching. Same cadence as the daily
+// summary plus an immediate refresh on wake_up.
+async function loadMonthlyEnergy(){
+  try{
+    const json = await fetchGenerationMonthly(MONTHLY_ALL_MONTHS);
+    if(json.error) throw new Error(json.error);
+    renderMonthly(json);
+  }catch(e){
+    console.error('Failed to load monthly energy', e);
+  }
+}
+
 async function loadInitialStatus(){
   try{
     const json = await fetchStatus();
@@ -218,6 +232,7 @@ function handleWSMessage(msg){
     loadGenerationSummary();
     loadImpact();
     loadYieldStats();
+    loadMonthlyEnergy();
     loadPowercutCount();
     startDayPolling();
   }
@@ -252,6 +267,14 @@ document.getElementById('cumRangeToggle').addEventListener('click', (e) => {
   setCumulativeRange(btn.dataset.range);
 });
 
+document.getElementById('monthlyRangeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-range]');
+  if(!btn) return;
+  document.querySelectorAll('#monthlyRangeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  setMonthlyRange(btn.dataset.range);
+});
+
 document.getElementById('csvBtn').addEventListener('click', () => {
   window.location.href = csvExportURL(state.range);
 });
@@ -265,6 +288,7 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadDailySummary();
   await loadGenerationSummary();
   await loadImpact();
+  await loadMonthlyEnergy();
   initYieldCard();
   await loadYieldStats();
   await loadPowercutCount();

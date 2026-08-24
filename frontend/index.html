@@ -239,6 +239,22 @@
         </div>
       </div>
 
+      <!-- Monthly energy (+ year-over-year once history allows) -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Monthly Energy <span class="tag" id="monthlyYoYTag" hidden></span></h3>
+          <div class="range-toggle" id="monthlyRangeToggle">
+            <button data-range="12" class="active">12M</button>
+            <button data-range="24">24M</button>
+            <button data-range="all">All</button>
+          </div>
+        </div>
+        <div class="chart-holder small">
+          <canvas id="monthlyChart"></canvas>
+          <div class="chart-msg" id="monthlyChartMsg"></div>
+        </div>
+      </div>
+
     </section>
 
     <aside class="col-side">

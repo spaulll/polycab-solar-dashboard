@@ -44,6 +44,12 @@ function fetchGenerationSummary(){
   return getJSON('/api/generation/summary');
 }
 
+// Monthly kWh totals bucketed from the same day series as the daily
+// summary, plus yoy_available / first_month context for the YoY rendering.
+function fetchGenerationMonthly(months){
+  return getJSON(`/api/generation/monthly?months=${months}`);
+}
+
 // Average daily yield + best/worst day over [from, to] (YYYY-MM-DD). When
 // both are omitted the backend picks the last 30 days; every response
 // carries the available min_date/max_date range for picker constraining.
@@ -81,6 +87,7 @@ export {
   fetchPeakProduction,
   fetchDailySummary,
   fetchGenerationSummary,
+  fetchGenerationMonthly,
   fetchGenerationStats,
   fetchStatus,
   fetchSunInfo,

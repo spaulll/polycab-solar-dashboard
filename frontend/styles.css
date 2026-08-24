@@ -546,6 +546,9 @@ body{
   color: var(--faint);
 }
 
+/* Explicit display above would beat [hidden]; restore it. */
+.tag[hidden]{ display: none; }
+
 .panel-body{
   padding: 16px;
 }

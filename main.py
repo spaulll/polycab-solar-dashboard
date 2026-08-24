@@ -488,6 +488,23 @@ async def api_generation_stats(
         return {"error": str(e)}
 
 
+@app.get("/api/generation/monthly")
+async def api_generation_monthly(
+    months: int = Query(
+        24, ge=1, le=1200, description="Return the most recent N months"
+    ),
+):
+    """
+    Monthly energy totals (kWh) for the Monthly Energy chart, bucketed from
+    the exact same day series as the KPI strip / Daily Energy Log
+    (readings_daily.energy_kwh + still-raw recent days grouped on the fly as
+    MAX(e_today)). Each month carries days_with_data so gap months can be
+    annotated; yoy_available turns true once a same-month-last-year
+    comparison exists (>= 13 months of history).
+    """
+    return await asyncio.to_thread(database.get_generation_monthly, months)
+
+
 @app.get("/api/db-status")
 async def api_db_status():
     """Database health: file size, row counts, last maintenance, retention."""

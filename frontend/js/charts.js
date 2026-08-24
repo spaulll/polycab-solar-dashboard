@@ -1,5 +1,6 @@
-// Chart.js setup and rendering for the Power Over Time chart and the Daily
-// Energy Log bar chart.
+// Chart.js setup and rendering for the Power Over Time chart, the Daily
+// Energy Log bar chart, the Cumulative Energy line and the Monthly Energy
+// bars (with year-over-year companions).
 //
 // Power Over Time renders four different views of the same underlying
 // history, selected by range:
@@ -716,6 +717,265 @@ function setCumulativeRange(range){
   renderCumulative();
 }
 
+// ---------- Monthly Energy (per-month totals + year-over-year) ----------
+// Consumes /api/generation/monthly, whose months are bucketed server-side
+// from the exact same day series as the Daily Energy Log -- so a month's
+// bar always equals the sum of that month's daily-log bars. The full series
+// is fetched once and sliced client-side per toggle (12/24/All), the same
+// pattern the Cumulative chart uses with the daily summary.
+//
+// Year-over-year rendering unlocks at >= 13 months of history
+// (payload.yoy_available): every month gains a "same month last year"
+// companion bar (existing steel series color, never a new hue) and a delta
+// tag in the panel head. Before that, a muted tag says what's missing and
+// the plain monthly bars work from day one.
+const MONTHLY_RANGES = { '12': 12, '24': 24 };
+// A past month counts as "partial data" when fewer than this fraction of
+// its calendar days actually reported; the in-progress month is never
+// called partial -- it is labeled "in progress" instead.
+const MONTHLY_PARTIAL_FRACTION = 0.75;
+
+let monthlyRange = '12';
+let latestMonthly = null;
+let monthlyByMonth = null;   // month -> {kwh, days, prevKwh} for tooltips/tag
+
+const monthlyChart = new Chart(el('monthlyChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'Month total',
+      data: [],
+      backgroundColor: rgba(solarRgb, 0.8),
+      borderRadius: 3,
+      maxBarThickness: 26,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 150 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: false,
+        position: 'top',
+        align: 'end',
+        labels: {
+          boxWidth: 10, boxHeight: 10, usePointStyle: true,
+          pointStyle: 'circle', padding: 14,
+        },
+      },
+      tooltip: {
+        backgroundColor: '#191c20',
+        borderColor: '#34383f',
+        borderWidth: 1,
+        titleColor: '#e9e7e2',
+        bodyColor: '#9aa1a9',
+        padding: 10,
+        callbacks: {
+          title: items => fmtMonthLong(items[0]?.label ?? ''),
+          label: item => {
+            const v = item.parsed.y;
+            if(v === null || v === undefined) return '';
+            if(item.datasetIndex === 0) return ` ${fmt(v, 1)} kWh`;
+            return ` ${fmtMonthYear(shiftMonthKey(item.label, -12))}: ${fmt(v, 1)} kWh`;
+          },
+          afterBody: items => monthlyTooltipNotes(items[0]?.label),
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display:false },
+        ticks: {
+          maxRotation: 45, minRotation: 0,
+          callback(value){ return fmtMonthShort(this.getLabelForValue(value)); },
+        }
+      },
+      y: { beginAtZero: true, grid: { color: themeColors.grid },
+           title:{display:true,text:'kWh',color:themeColors.axisTitle,font:{size:10}} }
+    }
+  }
+});
+
+const monthlyMsgEl = el('monthlyChartMsg');
+function setMonthlyMsg(text){
+  monthlyMsgEl.textContent = text || '';
+  monthlyMsgEl.classList.toggle('show', !!text);
+}
+
+function shiftMonthKey(ym, delta){
+  const year = Number(ym.slice(0, 4)), mon = Number(ym.slice(5, 7));
+  const idx = year * 12 + (mon - 1) + delta;
+  return `${Math.floor(idx / 12)}`.padStart(4, '0') +
+         `-` + String(idx % 12 + 1).padStart(2, '0');
+}
+
+function currentMonthKey(){
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Days the month could have reported so far: elapsed days for the
+// in-progress month, calendar length otherwise. Day keys are UTC dates
+// (same assumption as the backend's bucketing).
+function expectedDayCount(ym){
+  const year = Number(ym.slice(0, 4)), mon = Number(ym.slice(5, 7));
+  if(!year || !mon) return null;
+  if(ym === currentMonthKey()) return new Date().getUTCDate();
+  return new Date(Date.UTC(year, mon, 0)).getUTCDate();
+}
+
+function fmtMonthLong(ym){
+  const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1);
+  return isNaN(d) ? ym : d.toLocaleDateString([], {month:'long', year:'numeric'});
+}
+
+function fmtMonthYear(ym){
+  const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1);
+  return isNaN(d) ? ym : d.toLocaleDateString([], {month:'short', year:'numeric'});
+}
+
+function fmtMonthShort(ym){
+  const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1);
+  return isNaN(d) ? ym : d.toLocaleDateString([], {month:'short', year:'2-digit'});
+}
+
+function monthlyTooltipNotes(ym){
+  const ctx = monthlyByMonth?.get(ym);
+  if(!ctx) return [];
+  const notes = [];
+  if(ctx.prevKwh !== null && ctx.prevKwh > 0){
+    const pct = Math.round((ctx.kwh - ctx.prevKwh) / ctx.prevKwh * 100);
+    notes.push(`${pct >= 0 ? '+' : ''}${pct}% vs same month last year`);
+  }
+  const expected = expectedDayCount(ym);
+  if(expected !== null){
+    if(ym === currentMonthKey()){
+      notes.push(`month in progress · ${ctx.days}/${expected} days`);
+    }else if(ctx.days < Math.ceil(expected * MONTHLY_PARTIAL_FRACTION)){
+      notes.push(`partial data · ${ctx.days}/${expected} days`);
+    }
+  }
+  return notes;
+}
+
+function updateMonthlyYoYTag(byMonth, months){
+  const tag = el('monthlyYoYTag');
+  if(!months.length || !(latestMonthly?.yoy_available)){
+    // No comparison possible yet: say so once there is something to compare
+    // later; stay silent on a completely empty dashboard.
+    if(months.length){
+      tag.hidden = false;
+      tag.textContent = 'YoY needs more history';
+      tag.title = 'The year-over-year comparison appears once 13 months of history exist.';
+    }else{
+      tag.hidden = true;
+    }
+    return;
+  }
+  // Headline delta = newest COMPLETE month with a previous-year twin.
+  // The in-progress month would compare a partial total against a full one.
+  const curKey = currentMonthKey();
+  let best = null;
+  for(const m of months){
+    if(m.month === curKey) continue;
+    const prevKwh = byMonth.get(m.month)?.prevKwh;
+    if(prevKwh === null || prevKwh === undefined) continue;
+    best = {month: m.month, kwh: m.kwh, prevKwh};
+  }
+  if(!best || best.prevKwh <= 0){ tag.hidden = true; return; }
+  const pct = Math.round((best.kwh - best.prevKwh) / best.prevKwh * 100);
+  tag.hidden = false;
+  const sign = pct >= 0 ? '+' : '';
+  const prevKey = shiftMonthKey(best.month, -12);
+  tag.textContent =
+    `${fmtMonthShort(best.month)} ${sign}${pct}% vs \u2019${prevKey.slice(2, 4)}`;
+  tag.title = `${fmtMonthLong(best.month)}: ${fmt(best.kwh, 1)} kWh vs ` +
+    `${fmtMonthYear(prevKey)}: ${fmt(best.prevKwh, 1)} kWh`;
+}
+
+// Rebuilds labels/datasets/tag/message from latestMonthly + monthlyRange.
+// No update() call -- callers decide animation (data refresh vs theme flip).
+function rebuildMonthly(){
+  const months = latestMonthly?.months || [];
+
+  if(!months.length){
+    monthlyChart.data.labels = [];
+    monthlyChart.data.datasets = [{
+      label: 'Month total', data: [],
+      backgroundColor: rgba(solarRgb, 0.8),
+      borderRadius: 3, maxBarThickness: 26,
+    }];
+    monthlyChart.options.plugins.legend.display = false;
+    el('monthlyYoYTag').hidden = true;
+    setMonthlyMsg(latestMonthly ? 'No monthly data yet' : '');
+    return;
+  }
+
+  const kwhByMonth = new Map(months.map(m => [m.month, m.kwh]));
+  monthlyByMonth = new Map();
+  for(const m of months){
+    const prevKwh = kwhByMonth.get(shiftMonthKey(m.month, -12));
+    monthlyByMonth.set(m.month, {kwh: m.kwh, days: m.days_with_data, prevKwh: prevKwh ?? null});
+  }
+
+  const windowSize = MONTHLY_RANGES[monthlyRange];
+  const shown = windowSize ? months.slice(-windowSize) : months;
+
+  // Incomplete current month: reduced fill alpha only -- never a new hue.
+  const curKey = currentMonthKey();
+  const mainColors = shown.map(m =>
+    m.month === curKey ? rgba(solarRgb, 0.35) : rgba(solarRgb, 0.8));
+
+  const datasets = [{
+    label: 'Month total',
+    data: shown.map(m => m.kwh),
+    backgroundColor: mainColors,
+    borderRadius: 3,
+    maxBarThickness: 26,
+  }];
+
+  let hasPrevBars = false;
+  if(latestMonthly.yoy_available){
+    const prevData = shown.map(m => {
+      const v = monthlyByMonth.get(m.month)?.prevKwh;
+      if(v !== null) hasPrevBars = true;
+      return v;
+    });
+    if(hasPrevBars){
+      datasets.push({
+        label: 'Same month last year',
+        data: prevData,
+        backgroundColor: rgba(inverterRgb, 0.5),
+        borderRadius: 3,
+        maxBarThickness: 26,
+      });
+    }
+  }
+
+  monthlyChart.data.labels = shown.map(m => m.month);
+  monthlyChart.data.datasets = datasets;
+  monthlyChart.options.plugins.legend.display = hasPrevBars;
+  updateMonthlyYoYTag(monthlyByMonth, months);
+  setMonthlyMsg(null);
+}
+
+function renderMonthly(payload){
+  if(!payload || payload.error) return;
+  latestMonthly = payload;
+  rebuildMonthly();
+  monthlyChart.update();
+}
+
+function setMonthlyRange(range){
+  if(!(range === 'all' || MONTHLY_RANGES[range])) return;
+  monthlyRange = range;
+  rebuildMonthly();
+  monthlyChart.update();
+}
+
 // ---------- Theme switching ----------
 // Re-points every hardcoded canvas color and refreshes the live chart
 // instances without animation so grids/axes/tooltips/legends follow the
@@ -736,17 +996,20 @@ function applyChartTheme(themeName){
     padding: 10,
   };
   // Spread keeps each chart's existing callbacks (power's are swapped per
-  // view; cumulative owns fixed ones).
+  // view; cumulative and monthly own fixed ones).
   Object.assign(powerChart.options.plugins.tooltip, tooltip);
   Object.assign(cumulativeChart.options.plugins.tooltip, tooltip);
+  Object.assign(monthlyChart.options.plugins.tooltip, tooltip);
 
   // Series colors live on the datasets; re-point them so bars/lines/fills
   // follow the theme without waiting for the next data render.
   dailyChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.8);
   cumulativeChart.data.datasets[0].borderColor = rgba(solarRgb, 0.9);
   cumulativeChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.08);
+  // Monthly's per-bar alphas derive from the live rgb values, so rebuild.
+  if(latestMonthly) rebuildMonthly();
 
-  for(const chart of [powerChart, dailyChart, cumulativeChart]){
+  for(const chart of [powerChart, dailyChart, cumulativeChart, monthlyChart]){
     for(const scale of Object.values(chart.options.scales)){
       if(scale.grid) scale.grid.color = c.grid;
       if(scale.title?.color) scale.title.color = c.axisTitle;
@@ -755,4 +1018,4 @@ function applyChartTheme(themeName){
   }
 }
 
-export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, applyChartTheme };
+export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, applyChartTheme };

@@ -27,6 +27,10 @@ const POWERCUTS_REFRESH_MS = 60 * 1000;
 const SUN_INFO_REFRESH_MS = 5 * 60 * 1000;
 const SUN_COUNTDOWN_TICK_MS = 1000;
 
+// Monthly Energy: the full month series is fetched in one request (the
+// endpoint's hard cap) and sliced client-side per 12/24/All toggle.
+const MONTHLY_ALL_MONTHS = 1200;
+
 // Weather refresh cadence (backend caches server-side too).
 const WEATHER_REFRESH_MS = 15 * 60 * 1000;
 
@@ -43,4 +47,5 @@ export {
   SUN_INFO_REFRESH_MS,
   SUN_COUNTDOWN_TICK_MS,
   WEATHER_REFRESH_MS,
+  MONTHLY_ALL_MONTHS,
 };

@@ -78,7 +78,7 @@ solar-dashboard/
     │   ├── state.js          # Tiny shared state (selected range, night mode)
     │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
-    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, daily bar + cumulative energy charts
+    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, daily bar + cumulative energy + monthly energy (with YoY) charts
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
 │   ├── ui.js             # Status pills, night banner, stat cards
@@ -249,6 +249,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
 | `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries an `impact{}` block for the Savings & Impact panel (`tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂ kg/t, computed live at the current rates; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the dashboard's Generation KPI strip |
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
+| `GET /api/generation/monthly?months=N` | Monthly energy totals in kWh (`{month: "YYYY-MM", kwh, days_with_data}`, ascending), bucketed server-side from the exact same day series as the Daily Energy Log / KPI strip — a month's total always equals the sum of that month's daily bars. Also returns `first_month` (earliest month with data across all history) and `yoy_available` (true once a same-month-last-year pair exists, i.e. ≥ 13 months of history). `months` selects the most recent N months to return (default 24); `days_with_data` lets gap months be annotated instead of silently averaged. Backs the Monthly Energy chart |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
@@ -280,5 +281,17 @@ directory (path controlled by `DB_PATH`). The schema is created via
   pass. A 30D / 90D / All toggle slices the series (All is the default); it
   refreshes on the same cadence as the Daily Energy Log and immediately after
   night mode ends.
+- **Monthly Energy chart**: below the Cumulative Energy chart, a bar chart of
+  per-month kWh totals (`/api/generation/monthly`, bucketed server-side from
+  the same day series as the Daily Energy Log, so the numbers match exactly).
+  A 12M / 24M / All toggle slices the fetched series client-side; it
+  refreshes on the Daily Energy Log cadence and immediately after night mode
+  ends. Once ≥ 13 months of history exist (`yoy_available`), every month
+  gains a "same month last year" companion bar plus a delta tag in the panel
+  head (e.g. `Jul +12% vs '25`, based on the newest complete month);
+  before that, a muted tag notes the comparison needs more history while the
+  monthly bars work from day one. The in-progress month renders with reduced
+  fill alpha (never a new color) and months with missing days are annotated
+  `partial data · d/d days` in the tooltip.
 - To reset all history, stop the server and delete the SQLite file (`solar_data.db`
   by default).

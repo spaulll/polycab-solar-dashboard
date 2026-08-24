@@ -1105,6 +1105,87 @@ def get_generation_stats(
     }
 
 
+def get_generation_monthly(months_limit: int = 24) -> dict:
+    """
+    Monthly kWh totals for the Monthly Energy chart: every day total from the
+    exact same series as get_daily_summary()/get_generation_summary()
+    (readings_daily.energy_kwh for completed days + still-raw recent days
+    grouped on the fly as MAX(e_today)), bucketed into months in Python via
+    month = day[:7]. Day keys are UTC dates coinciding with local calendar
+    days -- the documented assumption behind the KPI strip -- so no new day
+    semantics are introduced here.
+
+    Response:
+      months         [{month: "2026-08", kwh, days_with_data}, ...] ascending,
+                     limited to the most recent `months_limit` buckets.
+                     days_with_data counts the day rows that contributed, so
+                     months with gaps can be annotated instead of silently
+                     averaged.
+      first_month    earliest month with any data across ALL history (not
+                     just the returned window) -- tells the UI how far back
+                     the dataset reaches.
+      yoy_available  True once at least one month has a same-month-last-year
+                     counterpart in the data (>= 13 months of history); gates
+                     the year-over-year rendering.
+
+    No schema change; cost is one small scan over two tiny tables plus one
+    grouped pass over the recent raw window.
+    """
+    conn = _connect()
+    try:
+        permanent = conn.execute(
+            "SELECT day, energy_kwh FROM readings_daily WHERE energy_kwh IS NOT NULL"
+        ).fetchall()
+        raw_days = conn.execute(
+            """
+            SELECT date(timestamp) AS day,
+                   MAX(e_today) AS energy_kwh
+            FROM readings
+            WHERE date(timestamp) NOT IN (SELECT day FROM readings_daily)
+              AND e_today IS NOT NULL
+            GROUP BY date(timestamp)
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    kwh_by_month: dict = {}
+    days_by_month: dict = {}
+    for r in list(permanent) + list(raw_days):
+        try:
+            datetime.strptime(r["day"], "%Y-%m-%d")
+        except (TypeError, ValueError):
+            continue
+        month = r["day"][:7]
+        kwh_by_month[month] = kwh_by_month.get(month, 0.0) + float(r["energy_kwh"] or 0.0)
+        days_by_month[month] = days_by_month.get(month, 0) + 1
+
+    all_months = sorted(kwh_by_month)
+    selected = all_months[-months_limit:] if months_limit else all_months
+
+    def _shift_months(month: str, delta: int) -> str:
+        year, mon = int(month[:4]), int(month[5:7])
+        idx = year * 12 + (mon - 1) + delta
+        return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+    yoy_available = any(
+        _shift_months(m, -12) in kwh_by_month for m in all_months
+    ) if all_months else False
+
+    return {
+        "months": [
+            {
+                "month": m,
+                "kwh": round(kwh_by_month[m], 2),
+                "days_with_data": days_by_month[m],
+            }
+            for m in selected
+        ],
+        "first_month": all_months[0] if all_months else None,
+        "yoy_available": yoy_available,
+    }
+
+
 # ---------------------------------------------------------------------------
 # DB status introspection
 # ---------------------------------------------------------------------------
