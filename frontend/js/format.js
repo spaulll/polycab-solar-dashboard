@@ -36,4 +36,27 @@ function fmtEnergy(kwh){
     : [n.toFixed(1), 'kWh'];
 }
 
-export { fmt, fmtTime, fmtClock, fmtDuration, fmtEnergy };
+// Money as one compact currency string: Indian-style digit grouping below a
+// lakh (₹48,250), then lakh/crore compaction (₹1.24 L, ₹2.31 Cr) so large
+// lifetime figures never overflow their row. `currency` is prepended as-is.
+function fmtMoney(amount, currency = ''){
+  if(amount === null || amount === undefined || Number.isNaN(Number(amount))) return '–';
+  const n = Number(amount);
+  const cur = currency || '';
+  if(n >= 1e7) return cur + (n / 1e7).toFixed(2) + ' Cr';
+  if(n >= 1e5) return cur + (n / 1e5).toFixed(2) + ' L';
+  return cur + Math.round(n).toLocaleString('en-IN');
+}
+
+// CO2 avoided in human units: kilograms below a tonne, tonnes above
+// (switch at >= 1000 kg). Returns [value, unit] like fmtEnergy,
+// or null when there is no value to show.
+function fmtCO2(kg){
+  if(kg === null || kg === undefined || Number.isNaN(Number(kg))) return null;
+  const n = Number(kg);
+  return n >= 1000
+    ? [(n / 1000).toFixed(2), 't']
+    : [Math.round(n).toString(), 'kg'];
+}
+
+export { fmt, fmtTime, fmtClock, fmtDuration, fmtEnergy, fmtMoney, fmtCO2 };

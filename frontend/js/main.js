@@ -13,6 +13,7 @@ import {
 } from './ui.js';
 import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
+import { loadImpact } from './impact.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
@@ -44,6 +45,7 @@ function startDayPolling(){
   if(dayTimers.length) return; // already running
   dayTimers.push(setInterval(loadDailySummary, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadGenerationSummary, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadImpact, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadYieldStats, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
@@ -214,6 +216,7 @@ function handleWSMessage(msg){
     // Fresh data after the long idle stretch, then resume the day cadence.
     loadDailySummary();
     loadGenerationSummary();
+    loadImpact();
     loadYieldStats();
     loadPowercutCount();
     startDayPolling();
@@ -261,6 +264,7 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadHistory();
   await loadDailySummary();
   await loadGenerationSummary();
+  await loadImpact();
   initYieldCard();
   await loadYieldStats();
   await loadPowercutCount();

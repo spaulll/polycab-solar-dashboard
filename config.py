@@ -24,6 +24,27 @@ def _env_float(name: str, default: float) -> float:
     return float(os.environ.get(name, default))
 
 
+def _env_tariff(name: str, default: float) -> float:
+    """
+    Electricity-tariff parser with a deliberate sentinel for the savings
+    feature: an absent key falls back to the built-in default, while an
+    explicit empty or unparseable value counts as "no tariff configured"
+    (0.0 -> /api/generation/summary reports impact as disabled). Negative
+    values are clamped to 0.0 for the same effect.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if not raw:
+        return 0.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.0
+    return value if value > 0 else 0.0
+
+
 def _env_int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
@@ -93,6 +114,21 @@ LONGITUDE: float = _env_float("LONGITUDE", 77.2090)
 # it is used as the primary provider for /api/weather; when missing or empty
 # the dashboard falls back to Open-Meteo, which needs no key at all.
 OPENWEATHER_API_KEY: str = os.environ.get("OPENWEATHER_API_KEY", "").strip()
+
+# --- Savings & impact (money saved + CO2 avoided) ---
+# Flat electricity tariff in currency units per kWh used to estimate money
+# saved from generated solar energy (v1 is flat-rate only; tiered slabs are
+# a possible future option). Figures are always computed live from
+# kWh x this rate -- no tariff history is stored, so changing the value
+# recomputes every savings figure. Set it to 0 (or empty) to disable and
+# hide the Savings & Impact panel entirely.
+ELECTRICITY_TARIFF: float = _env_tariff("ELECTRICITY_TARIFF", 8.0)
+# Currency symbol shown next to savings figures.
+CURRENCY_SYMBOL: str = os.environ.get("CURRENCY_SYMBOL", "₹").strip() or "₹"
+# Grid CO2 intensity (kg CO2 per kWh) used for the offset estimate. Default
+# approximates the CEA Indian grid emission factor; keep it configurable so
+# it can track future revisions.
+GRID_CO2_KG_PER_KWH: float = _env_float("GRID_CO2_KG_PER_KWH", 0.72)
 
 # --- Server ---
 HOST: str = os.environ.get("HOST", "0.0.0.0")

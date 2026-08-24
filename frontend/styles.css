@@ -832,6 +832,15 @@ select:hover{ color: var(--text); }
   transition: width 0.4s ease;
 }
 
+/* Savings & Impact: one primary insight block over the shared meta rows.
+   The insight's own bottom border is the divider; drop the meta list's
+   duplicate top hairline and its dead offset so both blocks read as one
+   stack (layout only -- inherits every color from the existing rules). */
+.insight + .meta-list{
+  border-top: none;
+  margin-top: 10px;
+}
+
 /* ==========================================================================
    Footer
    ========================================================================== */

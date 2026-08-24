@@ -81,9 +81,10 @@ solar-dashboard/
     │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, daily bar + cumulative energy charts
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
-    │   ├── ui.js             # Status pills, night banner, stat cards
-    │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
-    │   ├── weather.js        # Weather chip + popup UI
+│   ├── ui.js             # Status pills, night banner, stat cards
+│   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
+│   ├── impact.js           # Savings & Impact panel (money saved + CO2 avoided)
+│   ├── weather.js        # Weather chip + popup UI
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
 ```
@@ -111,6 +112,13 @@ nano .env
 Set at minimum `INVERTER_IP` and your location (`CITY`, `COUNTRY`, `TIMEZONE`,
 `LATITUDE`, `LONGITUDE` -- used for sunrise/sunset night-mode timing). See
 `.env.example` for the full list of options and their defaults.
+
+The **Savings & Impact** panel is driven by three settings: `ELECTRICITY_TARIFF`
+(flat ₹/kWh rate, default 8.0), `CURRENCY_SYMBOL` (default `₹`) and
+`GRID_CO2_KG_PER_KWH` (grid emission factor, default 0.72 ≈ CEA Indian grid
+average). Savings are always computed live as generated kWh × the current
+tariff — past rates are not stored, so changing the value recomputes every
+figure. Setting `ELECTRICITY_TARIFF=0` hides the panel entirely.
 
 `OPENWEATHER_API_KEY` is optional: when set, OpenWeatherMap is used as the
 primary weather provider for the top bar; when missing or empty, the
@@ -204,6 +212,21 @@ directory (path controlled by `DB_PATH`). The schema is created via
   `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
   inverter wakes up from night mode.
 
+- **Savings & Impact panel**: the last sidebar panel (below Insights), one
+  primary figure — lifetime money saved — over three muted rows: This Month,
+  This Year and CO₂ Avoided (kg, switching to tonnes at ≥ 1000 kg). All
+  figures are derived server-side in `/api/generation/summary`'s `impact`
+  block: lifetime savings use the inverter's own cumulative counter
+  (**Inverter Lifetime**, newest `E_Total` reading), month/year use the same
+  stored day buckets as the KPI strip, and money = kWh × `ELECTRICITY_TARIFF`,
+  CO₂ = kWh × `GRID_CO2_KG_PER_KWH`, both at the current config values (no
+  rate history), which the panel's tooltip notes. With `ELECTRICITY_TARIFF=0`
+  (or unset/invalid) the whole panel stays hidden rather than implying ₹0
+  saved. It refreshes once on load, on the same cadence as the Daily Energy
+  Log (`DAILY_SUMMARY_REFRESH_MS`, day mode only) and immediately after
+  night mode ends — identical lifecycle to the KPI strip. Large amounts
+  format compactly in Indian units (₹1,110 → ₹1.24 L → ₹2.31 Cr).
+
 - **Weather chip** (`weather.py` + `frontend/js/weather.js`): a small
   icon+temperature chip in the top bar — no permanent weather card. Clicking
   it opens a popup (with a dimmed, backdrop-blurred background; click the
@@ -224,7 +247,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
-| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Backs the dashboard's Generation KPI strip |
+| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries an `impact{}` block for the Savings & Impact panel (`tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂ kg/t, computed live at the current rates; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the dashboard's Generation KPI strip |
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |

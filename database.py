@@ -861,6 +861,17 @@ def get_generation_summary() -> dict:
       slightly (partial days, counter reset timing, rounding, data recorded
       before the dashboard existed); both are exposed so the UI can show
       that gap honestly instead of hiding it.
+
+    The response also carries an `impact` block (Savings & Impact panel):
+    pure arithmetic -- no extra queries. Lifetime savings follow the
+    inverter's own cumulative counter (`inverter_lifetime` = newest e_total),
+    while month/year keep using the same stored day buckets as the KPI
+    strip. Money/CO2 figures always use the *current* tariff/emission factor
+    from config (no rate history is kept, so changing ELECTRICITY_TARIFF
+    recomputes every figure). With the tariff unset or <= 0 the block
+    degrades to {"enabled": false} instead of showing fabricated zeros, and
+    before the first e_total reading arrives the lifetime fields are null
+    rather than 0.
     """
     tz = _local_tz()
     now_local = datetime.now(timezone.utc).astimezone(tz)
@@ -939,6 +950,35 @@ def get_generation_summary() -> dict:
     def _round(value):
         return round(value, 2) if value is not None else None
 
+    # --- Savings & impact (money saved + CO2 avoided) --------------------
+    tariff = config.ELECTRICITY_TARIFF
+    if tariff is not None and tariff > 0:
+        co2_factor = config.GRID_CO2_KG_PER_KWH
+        # Lifetime basis: the inverter's own running counter (e_total) --
+        # the same figure the KPI strip shows as Inverter Lifetime. Null
+        # until the first e_total reading exists; no fabricated zeros.
+        lifetime = lifetime_kwh
+        impact = {
+            "enabled": True,
+            "tariff": tariff,
+            "currency": config.CURRENCY_SYMBOL,
+            "co2_factor": co2_factor,
+            "lifetime_kwh": _round(lifetime),
+            "this_month_kwh": _round(month_kwh),
+            "this_year_kwh": _round(year_kwh),
+            "lifetime_inr": (
+                _round(lifetime * tariff) if lifetime is not None else None
+            ),
+            "this_month_inr": _round(month_kwh * tariff),
+            "this_year_inr": _round(year_kwh * tariff),
+            "lifetime_co2_kg": (
+                _round(lifetime * co2_factor) if lifetime is not None else None
+            ),
+            "this_year_co2_t": _round(year_kwh * co2_factor / 1000.0),
+        }
+    else:
+        impact = {"enabled": False}
+
     return {
         "today": _round(today_kwh),
         "yesterday": _round(yesterday_kwh),
@@ -950,6 +990,7 @@ def get_generation_summary() -> dict:
         "calculated_total": _round(days_sum),
         # The inverter's own running counter, straight from the newest read.
         "inverter_lifetime": _round(lifetime_kwh),
+        "impact": impact,
     }
 
 

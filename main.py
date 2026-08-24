@@ -458,6 +458,13 @@ async def api_generation_summary():
     (Monday-today) / this month / this year, plus both lifetime figures --
     `calculated_total` (sum of stored daily energy) and `inverter_lifetime`
     (the inverter's own e_total counter), which can differ slightly.
+
+    Also carries an `impact` block for the Savings & Impact panel: lifetime
+    savings/CO2 follow the inverter's own e_total counter (Inverter
+    Lifetime), month/year use the stored day buckets, and all money figures
+    apply ELECTRICITY_TARIFF live (CO2 uses GRID_CO2_KG_PER_KWH). When the
+    tariff is unset or <= 0 it degrades to `{"enabled": false}` so the UI
+    can hide the panel.
     """
     return await asyncio.to_thread(database.get_generation_summary)
 
