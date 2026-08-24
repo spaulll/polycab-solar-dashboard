@@ -461,6 +461,25 @@ async def api_generation_summary():
     return await asyncio.to_thread(database.get_generation_summary)
 
 
+@app.get("/api/generation/stats")
+async def api_generation_stats(
+    from_: Optional[str] = Query(None, alias="from", description="YYYY-MM-DD"),
+    to_: Optional[str] = Query(None, alias="to", description="YYYY-MM-DD"),
+):
+    """
+    Range-selectable yield stats: total kWh, average per day and best/worst
+    day over [from, to]. Only days that actually have generation data count.
+    `to` must be <= today (local) and `from` >= the first day in the
+    database; when omitted, the last 30 days ending today are used. Every
+    response echoes min_date/max_date -- the full available range -- so the
+    frontend can constrain its date pickers.
+    """
+    try:
+        return await asyncio.to_thread(database.get_generation_stats, from_, to_)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/db-status")
 async def api_db_status():
     """Database health: file size, row counts, last maintenance, retention."""

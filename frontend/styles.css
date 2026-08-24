@@ -537,6 +537,34 @@ select{
 
 select:hover{ color: var(--text); }
 
+/* Date-range pair in the Average Daily Yield panel head; color-scheme so
+   the native picker icon/text match the dark theme. */
+.date-range{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-range input[type="date"]{
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 8px;
+  color-scheme: dark;
+}
+
+.date-range input[type="date"]:hover{ color: var(--text); }
+
+.date-range .range-dash{
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
 /* ==========================================================================
    Chart holders & overlay message
    ========================================================================== */

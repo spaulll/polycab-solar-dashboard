@@ -14,6 +14,7 @@ import {
 import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
+import { initYieldCard, loadYieldStats } from './yield.js';
 
 // ---------- Powercuts counter ----------
 let pcRange = 'today';
@@ -40,6 +41,7 @@ function startDayPolling(){
   if(dayTimers.length) return; // already running
   dayTimers.push(setInterval(loadDailySummary, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadGenerationSummary, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadYieldStats, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -209,6 +211,7 @@ function handleWSMessage(msg){
     // Fresh data after the long idle stretch, then resume the day cadence.
     loadDailySummary();
     loadGenerationSummary();
+    loadYieldStats();
     loadPowercutCount();
     startDayPolling();
   }
@@ -253,6 +256,8 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadHistory();
   await loadDailySummary();
   await loadGenerationSummary();
+  initYieldCard();
+  await loadYieldStats();
   await loadPowercutCount();
   connectWebSocket(handleWSMessage);
   // Daily summary + powercuts intervals follow day/night (see

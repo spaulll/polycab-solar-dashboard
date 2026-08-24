@@ -81,6 +81,7 @@ solar-dashboard/
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
     │   ├── ui.js             # Status pills, night banner, stat cards
+    │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
 ```
@@ -175,6 +176,16 @@ directory (path controlled by `DB_PATH`). The schema is created via
   astral calculation, sessions are bucketed relative to each day's sunrise,
   and the long-term profile is aggregated inside SQLite. Raw readings are
   never modified; this is purely a read-side view.
+- **Average Daily Yield card**: in the sidebar (between Inverter Status and
+  Insights), one panel stacking Average / Best Day / Worst Day. Two date
+  inputs in the panel head select the range; both are constrained via
+  `min`/`max` attributes to `[first day with data … today]` as reported by
+  `/api/generation/stats` (`min_date`/`max_date`). The default range is the
+  last 30 days ending today, applied server-side on first load and then
+  synced into the inputs — so short histories simply start at their first
+  day instead of erroring. Only days that actually have generation data are
+  counted; gaps in the range never dilute the average. Refreshes on the same
+  cadence as the Daily Energy Log and immediately after night mode ends.
 - **Generation KPI strip**: a six-card strip under the live stat cards showing
   Today / Yesterday / This Week / This Month / This Year, plus a wider
   Lifetime card that shows **both** lifetime figures: Calculated Production
@@ -196,6 +207,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
 | `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Backs the dashboard's Generation KPI strip |
+| `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |

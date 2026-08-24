@@ -44,6 +44,15 @@ function fetchGenerationSummary(){
   return getJSON('/api/generation/summary');
 }
 
+// Average daily yield + best/worst day over [from, to] (YYYY-MM-DD). When
+// both are omitted the backend picks the last 30 days; every response
+// carries the available min_date/max_date range for picker constraining.
+function fetchGenerationStats(fromDay, toDay){
+  let path = '/api/generation/stats';
+  if(fromDay && toDay) path += `?from=${fromDay}&to=${toDay}`;
+  return getJSON(path);
+}
+
 function fetchStatus(){
   return getJSON('/api/status');
 }
@@ -67,6 +76,7 @@ export {
   fetchPeakProduction,
   fetchDailySummary,
   fetchGenerationSummary,
+  fetchGenerationStats,
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,

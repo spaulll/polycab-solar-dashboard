@@ -953,6 +953,117 @@ def get_generation_summary() -> dict:
     }
 
 
+def get_generation_stats(
+    from_day: Optional[str] = None, to_day: Optional[str] = None
+) -> dict:
+    """
+    Range-selectable yield stats: total, average per day, best and worst day
+    over [from_day, to_day] (inclusive, YYYY-MM-DD local dates).
+
+    Day totals use the same series as get_daily_summary (readings_daily for
+    completed days + on-the-fly grouping of still-raw recent days), and only
+    days that actually have data are counted -- gaps in the range simply
+    don't exist in the series.
+
+    Validation: to_day must be <= today's local date and from_day must be >=
+    the first day present in the database; violations raise ValueError (the
+    endpoint turns that into an {"error": ...} response). When omitted,
+    defaults are the last 30 days ending today.
+
+    min_date/max_date always carry the full available range so the frontend
+    can constrain its date pickers.
+    """
+    tz = _local_tz()
+    today = datetime.now(timezone.utc).astimezone(tz).date()
+
+    conn = _connect()
+    try:
+        permanent = conn.execute(
+            "SELECT day, energy_kwh FROM readings_daily WHERE energy_kwh IS NOT NULL"
+        ).fetchall()
+        raw_days = conn.execute(
+            """
+            SELECT date(timestamp) AS day,
+                   MAX(e_today) AS energy_kwh
+            FROM readings
+            WHERE date(timestamp) NOT IN (SELECT day FROM readings_daily)
+              AND e_today IS NOT NULL
+            GROUP BY date(timestamp)
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    series: dict = {}
+    first_day = None
+    for r in list(permanent) + list(raw_days):
+        try:
+            d = datetime.strptime(r["day"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        series[d] = float(r["energy_kwh"] or 0.0)
+        if first_day is None or d < first_day:
+            first_day = d
+
+    if first_day is None:
+        raise ValueError("No generation data available yet.")
+
+    def _parse(value: str, label: str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Invalid '{label}' date {value!r}, expected YYYY-MM-DD."
+            )
+
+    end = _parse(to_day, "to") if to_day else today
+    if end > today:
+        raise ValueError(f"'to' ({to_day}) is after today ({today.isoformat()}).")
+
+    start = (
+        _parse(from_day, "from") if from_day
+        else max(first_day, end - timedelta(days=29))
+    )
+    if start < first_day:
+        raise ValueError(
+            f"'from' ({from_day}) is before the first day with data "
+            f"({first_day.isoformat()})."
+        )
+    if start > end:
+        raise ValueError("'from' must not be after 'to'.")
+
+    days = 0
+    total = 0.0
+    best = worst = None  # (date, kwh)
+    for d in sorted(series):
+        if start <= d <= end:
+            kwh = series[d]
+            days += 1
+            total += kwh
+            if best is None or kwh > best[1]:
+                best = (d, kwh)
+            if worst is None or kwh < worst[1]:
+                worst = (d, kwh)
+
+    def _round(v):
+        return round(v, 2)
+
+    def _day(pair):
+        return {"date": pair[0].isoformat(), "kwh": _round(pair[1])} if pair else None
+
+    return {
+        "min_date": first_day.isoformat(),
+        "max_date": today.isoformat(),
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "days": days,
+        "total_kwh": _round(total),
+        "average_daily_kwh": _round(total / days) if days else None,
+        "best_day": _day(best),
+        "worst_day": _day(worst),
+    }
+
+
 # ---------------------------------------------------------------------------
 # DB status introspection
 # ---------------------------------------------------------------------------
