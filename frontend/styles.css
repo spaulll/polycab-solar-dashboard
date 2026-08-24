@@ -458,6 +458,14 @@ body{
 .layout{
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  /* Columns size independently: neither is stretched to the other's height.
+     Stretching matters because the grid row height is MAX(colA, colB) -- once
+     the sidebar grew past the chart column (Savings & Impact), stretch made
+     the sidebar drive the row and inflated every chart panel with dead space
+     below its fixed-height .chart-holder. align-items:start keeps each
+     column at its natural height; a ragged bottom edge between the columns
+     is the honest cost of letting the sidebar grow freely. */
+  align-items: start;
   gap: 20px;
 }
 
@@ -469,10 +477,11 @@ body{
 
 .col-main{ display: grid; grid-template-columns: minmax(0, 1fr); }
 
-/* Sidebar stretches to the full height of the (taller) chart column and
-   splits the slack equally between its three panels, so both columns
-   share top AND bottom edges with even 20px gaps — without forcing the
-   chart panels to any height. */
+/* Sidebar is a plain stack of naturally-sized panels. It may end higher or
+   lower than the chart column -- never force-matched to it (see
+   .layout's align-items:start). The flex column + flex:1 panel-body rules
+   below still apply whenever an individual panel ends up taller than its
+   content, keeping each panel's internals distributed as designed. */
 .col-side{
   display: flex;
   flex-direction: column;
@@ -481,7 +490,6 @@ body{
 .col-side .panel{
   display: flex;
   flex-direction: column;
-  flex: 1 0 auto;
 }
 
 .col-side .panel-head{ flex: none; }
