@@ -25,9 +25,17 @@ const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
 const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
 const rgba = (rgb, a) => `rgba(${rgb},${a})`;
 
+// Active series colors; dark keeps the baseline constants, light swaps in
+// deeper variants so lines/bars hold contrast on white surfaces. Re-pointed
+// by applyChartTheme().
+let solarRgb = SOLAR_RGB;
+let inverterRgb = INVERTER_RGB;
+
 // Chart palette per dashboard theme; matches styles.css variables.
 const CHART_THEMES = {
   dark: {
+    solarRgb: SOLAR_RGB,
+    inverterRgb: INVERTER_RGB,
     text: '#9aa1a9',
     grid: 'rgba(233,231,226,0.06)',
     axisTitle: '#5f666e',
@@ -39,15 +47,19 @@ const CHART_THEMES = {
     dayLabel: '#9aa1a9',
   },
   light: {
-    text: '#4b525b',
-    grid: 'rgba(35,38,43,0.14)',
-    axisTitle: '#737a85',
-    tooltipBg: '#ffffff',
-    tooltipBorder: '#b0b5bc',
-    tooltipTitle: '#1a1d21',
-    tooltipBody: '#4b525b',
-    dayLine: 'rgba(35,38,43,0.22)',
-    dayLabel: '#4b525b',
+    // Series match the CSS accents: bronze-amber solar, deep steel inverter
+    // (kept cool on purpose against the warm paper surfaces).
+    solarRgb: '176,111,22',
+    inverterRgb: '82,112,140',
+    text: '#4d463e',
+    grid: 'rgba(27,23,19,0.11)',
+    axisTitle: '#6f675b',
+    tooltipBg: '#fefdfb',
+    tooltipBorder: '#c2bbb1',
+    tooltipTitle: '#1b1713',
+    tooltipBody: '#4d463e',
+    dayLine: 'rgba(27,23,19,0.16)',
+    dayLabel: '#4d463e',
   },
 };
 
@@ -238,9 +250,9 @@ function powerLegendEntries(chart){
   const fontColor = Chart.defaults.color;
   if(powerMode === 'profile'){
     return [
-      { text: 'Solar Input (W)', fillStyle: rgba(SOLAR_RGB, 1), strokeStyle: rgba(SOLAR_RGB, 1),
+      { text: 'Solar Input (W)', fillStyle: rgba(solarRgb, 1), strokeStyle: rgba(solarRgb, 1),
         lineWidth: 2, lineDash: [], pointStyle: 'circle', fontColor, datasetIndex: -1 },
-      { text: 'Inverter Power (W)', fillStyle: rgba(INVERTER_RGB, 1), strokeStyle: rgba(INVERTER_RGB, 1),
+      { text: 'Inverter Power (W)', fillStyle: rgba(inverterRgb, 1), strokeStyle: rgba(inverterRgb, 1),
         lineWidth: 2, lineDash: [], pointStyle: 'circle', fontColor, datasetIndex: -1 },
     ];
   }
@@ -275,8 +287,8 @@ function lineDataset({ label, data, rgb, alpha = 1, fill = false }){
 
 function emptyMetricDatasets(){
   return [
-    lineDataset({ label: 'Solar Input (W)', data: [], rgb: SOLAR_RGB, fill: true }),
-    lineDataset({ label: 'Inverter Power (W)', data: [], rgb: INVERTER_RGB }),
+    lineDataset({ label: 'Solar Input (W)', data: [], rgb: solarRgb, fill: true }),
+    lineDataset({ label: 'Inverter Power (W)', data: [], rgb: inverterRgb }),
   ];
 }
 
@@ -318,8 +330,8 @@ function renderRolling(readings){
   powerChart.options.layout = {}; // 7D leaves extra bottom padding; undo it
   const {solar, power} = toPointArrays(readings);
   powerChart.data.datasets = [
-    lineDataset({ label: 'Solar Input (W)', data: solar, rgb: SOLAR_RGB, fill: true }),
-    lineDataset({ label: 'Inverter Power (W)', data: power, rgb: INVERTER_RGB }),
+    lineDataset({ label: 'Solar Input (W)', data: solar, rgb: solarRgb, fill: true }),
+    lineDataset({ label: 'Inverter Power (W)', data: power, rgb: inverterRgb }),
   ];
   powerChart.options.scales.x = timeAxisConfig({
     unit: 'minute', stepSize: 5, tooltipFormat: 'HH:mm:ss'
@@ -367,8 +379,8 @@ function renderToday(readings, sunInfo){
   const {solar, power} = toPointArrays(scoped);
   powerChart.options.layout = {};
   powerChart.data.datasets = [
-    lineDataset({ label: 'Solar Input (W)', data: solar, rgb: SOLAR_RGB, fill: true }),
-    lineDataset({ label: 'Inverter Power (W)', data: power, rgb: INVERTER_RGB }),
+    lineDataset({ label: 'Solar Input (W)', data: solar, rgb: solarRgb, fill: true }),
+    lineDataset({ label: 'Inverter Power (W)', data: power, rgb: inverterRgb }),
   ];
   powerChart.options.scales.x = timeAxisConfig({
     unit: 'hour', stepSize: 1, tooltipFormat: 'HH:mm:ss', min: sunrise ?? undefined, max: end,
@@ -453,8 +465,8 @@ function renderSessions(sessions){
 
   powerChart.$sessionDayMarks = dayMarks;
   powerChart.data.datasets = [
-    lineDataset({label: 'Solar Input (W)', data: solarData, rgb: SOLAR_RGB, fill: true}),
-    lineDataset({label: 'Inverter Power (W)', data: invData, rgb: INVERTER_RGB}),
+    lineDataset({label: 'Solar Input (W)', data: solarData, rgb: solarRgb, fill: true}),
+    lineDataset({label: 'Inverter Power (W)', data: invData, rgb: inverterRgb}),
   ];
   powerChart.options.layout = {padding: {bottom: 18}}; // room for date labels
   const xAxis = solarAxisConfig(0);
@@ -512,7 +524,7 @@ function renderProfile(profile){
     (() => {
       const ds = lineDataset({
         label: `Solar Input — avg over ${profile.day_count} days`,
-        data: solarData, rgb: SOLAR_RGB, fill: true,
+        data: solarData, rgb: solarRgb, fill: true,
       });
       ds.metric = 'Solar Input';
       return ds;
@@ -520,7 +532,7 @@ function renderProfile(profile){
     (() => {
       const ds = lineDataset({
         label: 'Inverter Power — avg',
-        data: invData, rgb: INVERTER_RGB,
+        data: invData, rgb: inverterRgb,
       });
       ds.metric = 'Inverter Power';
       return ds;
@@ -602,7 +614,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
     datasets: [{
       label: 'Energy (kWh)',
       data: [],
-      backgroundColor: 'rgba(226,162,74,0.8)',
+      backgroundColor: rgba(solarRgb, 0.8),
       borderRadius: 3,
       maxBarThickness: 26,
     }]
@@ -640,8 +652,8 @@ const cumulativeChart = new Chart(el('cumulativeChart').getContext('2d'), {
     datasets: [{
       label: 'Cumulative Energy (kWh)',
       data: [],
-      borderColor: rgba(SOLAR_RGB, 0.9),
-      backgroundColor: rgba(SOLAR_RGB, 0.08),
+      borderColor: rgba(solarRgb, 0.9),
+      backgroundColor: rgba(solarRgb, 0.08),
       borderWidth: 1.8,
       pointRadius: 0,
       pointHoverRadius: 4,
@@ -711,6 +723,8 @@ function setCumulativeRange(range){
 function applyChartTheme(themeName){
   const c = CHART_THEMES[themeName] ?? CHART_THEMES.dark;
   themeColors = c;
+  solarRgb = c.solarRgb;
+  inverterRgb = c.inverterRgb;
   setChartDefaults(c);
 
   const tooltip = {
@@ -725,6 +739,12 @@ function applyChartTheme(themeName){
   // view; cumulative owns fixed ones).
   Object.assign(powerChart.options.plugins.tooltip, tooltip);
   Object.assign(cumulativeChart.options.plugins.tooltip, tooltip);
+
+  // Series colors live on the datasets; re-point them so bars/lines/fills
+  // follow the theme without waiting for the next data render.
+  dailyChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.8);
+  cumulativeChart.data.datasets[0].borderColor = rgba(solarRgb, 0.9);
+  cumulativeChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.08);
 
   for(const chart of [powerChart, dailyChart, cumulativeChart]){
     for(const scale of Object.values(chart.options.scales)){
