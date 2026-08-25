@@ -42,6 +42,12 @@ function fetchPeakProduction(range){
   return getJSON(`/api/insights/peak?range=${range}`);
 }
 
+// Inverter temperature analytics: daylight-only time-of-day/output-band
+// aggregates plus all-history records (see /api/insights/temperature).
+function fetchTemperatureInsights(){
+  return getJSON('/api/insights/temperature');
+}
+
 function fetchDailySummary(){
   return getJSON('/api/daily-summary').then(json => json.days || []);
 }
@@ -93,6 +99,7 @@ export {
   fetchSolarProfile,
   fetchTodayProjection,
   fetchPeakProduction,
+  fetchTemperatureInsights,
   fetchDailySummary,
   fetchGenerationSummary,
   fetchGenerationMonthly,

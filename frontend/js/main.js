@@ -15,6 +15,7 @@ import {
 import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, loadTodayProjection, updatePaceTag } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
+import { loadTemperature, updateCurrentTemp, initTemperature } from './temperature.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
@@ -44,6 +45,7 @@ function startDayPolling(){
   dayTimers.push(setInterval(loadImpact, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadYieldStats, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadMonthlyEnergy, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadTemperature, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -187,6 +189,7 @@ function handleWSMessage(msg){
       updateStatCards(msg.last_reading);
       dimStatCards(msg.night_mode);
       setLastUpdated(msg.last_reading.timestamp);
+      updateCurrentTemp(msg.last_reading.Temperature);
     }
     if(msg.sun){
       updateSunInfo(msg.sun);
@@ -206,6 +209,7 @@ function handleWSMessage(msg){
     dimStatCards(false);
     updateStatCards(msg.data);
     setLastUpdated(msg.data.timestamp);
+    updateCurrentTemp(msg.data.Temperature);
     appendLivePoint(msg.data);
     // Re-project the pace tag from the fetched typical-day curve (no
     // refetch per tick).
@@ -238,6 +242,7 @@ function handleWSMessage(msg){
     loadImpact();
     loadYieldStats();
     loadMonthlyEnergy();
+    loadTemperature();
     loadPowercutCount();
     startDayPolling();
   }
@@ -350,6 +355,10 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   await loadMonthlyEnergy();
   initYieldCard();
   await loadYieldStats();
+  // Temperature panel: restore the saved lens before the first fetch so it
+  // renders straight into the remembered view.
+  initTemperature();
+  await loadTemperature();
   await loadPowercutCount();
   connectWebSocket(handleWSMessage);
   // Daily summary + powercuts intervals follow day/night (see

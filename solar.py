@@ -17,6 +17,7 @@ contain only daylight readings by construction.
 import datetime as dt
 import math
 import time
+from typing import Optional
 
 import config
 import database
@@ -45,18 +46,24 @@ PROFILE_BIN_MINUTES = 5
 # the default profile: the overlay only needs the day's overall shape.
 PROJECTION_BIN_MINUTES = 15
 
+# In-process caches for the raw-table aggregations (solar profile,
+# temperature analytics), keyed by bin size. Both scan every daylight
+# reading in the `readings` table, so repeated calls would otherwise re-run
+# the same SQLite scan per request. They only change as history grows --
+# new days land at sunrise and old raw data is downsampled once a night --
+# so a short TTL is enough; there is nothing to invalidate on wake-up.
+PROFILE_CACHE_TTL_SECONDS = 15 * 60
+_profile_cache: dict[int, tuple[float, dict]] = {}
+
+# Default bin width for the temperature time-of-day profile (minutes), and
+# the TTL of its cache -- same reasoning as the power profile above.
+TEMP_BIN_MINUTES = 15
+TEMP_CACHE_TTL_SECONDS = 15 * 60
+_temp_cache: dict[int, tuple[float, dict]] = {}
+
 # Sanity caps on request parameters.
 MAX_SESSION_DAYS = 30
 MAX_PROFILE_BIN_MINUTES = 30
-
-# In-process cache for get_solar_profile() results, keyed by bin size. The
-# aggregation scans every raw daylight reading, so repeated calls (All view,
-# today projection) would otherwise re-run the same SQLite scan per request.
-# The profile only changes as history grows -- new days land at sunrise and
-# old raw data is downsampled once a night -- so a short TTL is enough; there
-# is nothing to invalidate on wake-up.
-PROFILE_CACHE_TTL_SECONDS = 15 * 60
-_profile_cache: dict[int, tuple[float, dict]] = {}
 
 
 def to_utc_naive_iso(aware_iso: str) -> str:
@@ -201,6 +208,30 @@ def _profile_windows(start_local: dt.date, end_local: dt.date) -> list[tuple[str
     return windows
 
 
+def _data_span_windows() -> tuple[list[tuple[str, str]], Optional[str], Optional[str]]:
+    """
+    Sun windows covering every raw-data day, plus the honest local-date span
+    of the raw table as (windows, from_day, to_day). Empty/None triple when
+    there is no raw data at all.
+
+    The windows are extended one day on each side of the span so no daylight
+    reading is missed at the edges (a local date's window can cross UTC
+    midnight). `from_day`/`to_day` deliberately report the UNPADDED data
+    span: callers that state "based on N days" to the user must not count
+    the padding.
+    """
+    lo, hi = database.get_readings_time_span()
+    if not (lo and hi):
+        return [], None, None
+    tz = inverter.local_tz()
+    first = dt.datetime.fromisoformat(lo).astimezone(tz).date()
+    last = dt.datetime.fromisoformat(hi).astimezone(tz).date()
+    windows = _profile_windows(
+        first - dt.timedelta(days=1), last + dt.timedelta(days=1)
+    )
+    return windows, first.isoformat(), last.isoformat()
+
+
 def get_solar_profile(bin_minutes: int = PROFILE_BIN_MINUTES) -> dict:
     """
     Long-term average power vs position within the solar day, aggregated
@@ -219,25 +250,98 @@ def get_solar_profile(bin_minutes: int = PROFILE_BIN_MINUTES) -> dict:
     if cached is not None and (now - cached[0]) < PROFILE_CACHE_TTL_SECONDS:
         return cached[1]
 
-    lo, hi = database.get_readings_time_span()
-    bins = []
-    day_count = 0
-    if lo and hi:
-        tz = inverter.local_tz()
-        # Extend one day on each side of the span so no daylight reading is
-        # missed at the edges (a local date's window can cross UTC midnight).
-        first = dt.datetime.fromisoformat(lo).astimezone(tz).date() - dt.timedelta(days=1)
-        last = dt.datetime.fromisoformat(hi).astimezone(tz).date() + dt.timedelta(days=1)
-        windows = _profile_windows(first, last)
-        day_count = len(windows)
-        bins = database.aggregate_solar_profile(windows, bin_seconds)
+    windows, _, _ = _data_span_windows()
+    bins = database.aggregate_solar_profile(windows, bin_seconds)
 
     result = {
         "bin_seconds": bin_seconds,
-        "day_count": day_count,
+        "day_count": len(windows),
         "bins": bins,
     }
     _profile_cache[bin_seconds] = (now, result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Inverter temperature analytics
+# ---------------------------------------------------------------------------
+def get_temperature_analytics(bin_minutes: int = TEMP_BIN_MINUTES) -> dict:
+    """
+    Temperature view for the sidebar panel: how inverter internal temperature
+    behaves vs output power and vs position within the solar day, plus the
+    all-history records. All aggregation runs inside SQLite over DAYLIGHT
+    readings only -- night residuals never enter (the polling loop is asleep
+    then anyway); see database.aggregate_temperature_*.
+
+    by_time_of_day / by_output come from the full-resolution raw window
+    (RETENTION_DAYS -- detail degrades beyond that); records span ALL history
+    because readings_daily.temperature_max is permanent.
+
+    Cached in-process per bin size like the power profile: the underlying
+    scan only moves meaningfully on the scale of days, and the panel polls
+    every few minutes.
+    """
+    bin_seconds = max(300, min(int(bin_minutes), 60) * 60)
+
+    now = time.monotonic()
+    cached = _temp_cache.get(bin_seconds)
+    if cached is not None and (now - cached[0]) < TEMP_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    windows, span_from, span_to = _data_span_windows()
+
+    by_output = database.aggregate_temperature_by_output(windows)
+    by_time = database.aggregate_temperature_by_time(windows, bin_seconds)
+    today_since = get_today_window()["since"] if windows else None
+    records = database.get_temperature_records(today_since)
+
+    total_samples = sum(b["n"] for b in by_time)
+
+    def _round(value, digits=1):
+        return round(value, digits) if value is not None else None
+
+    result = {
+        "bin_seconds": bin_seconds,
+        "band_watts": database.TEMP_OUTPUT_BAND_WATTS,
+        "detail_span": (
+            {"from": span_from, "to": span_to} if span_from else None
+        ),
+        "total_samples": total_samples,
+        "by_time_of_day": [
+            {
+                "o": b["o"],
+                "temp_avg": _round(b["temp_avg"]),
+                "temp_max": _round(b["temp_max"]),
+                "n": b["n"],
+            }
+            for b in by_time
+        ],
+        "by_output": [
+            {
+                "band_w": b["band_w"],
+                "temp_avg": _round(b["temp_avg"]),
+                "temp_max": _round(b["temp_max"]),
+                "power_avg": _round(b["power_avg"]),
+                # Ratio (0..~1); the UI renders it as a percentage.
+                "eff": _round(b["eff"], 4),
+                "n": b["n"],
+            }
+            for b in by_output
+        ],
+        "records": {
+            "today_max": _round(records["today_max"]),
+            "all_time_max": _round(records["all_time_max"]),
+            "hottest_day": (
+                {
+                    "date": records["hottest_day"]["date"],
+                    "temp_max": _round(records["hottest_day"]["temp_max"]),
+                }
+                if records["hottest_day"]
+                else None
+            ),
+        },
+    }
+    _temp_cache[bin_seconds] = (now, result)
     return result
 
 

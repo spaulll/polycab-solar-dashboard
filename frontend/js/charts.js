@@ -1117,6 +1117,228 @@ function setMonthlyRange(range){
   monthlyChart.update();
 }
 
+// ---------- Temperature (sidebar mini chart) ----------
+// Consumes /api/insights/temperature: daylight-only aggregates computed
+// server-side over the raw window. One small chart, two lenses selected by
+// the panel-head toggle:
+//   tod -> avg/max internal temperature vs seconds-after-sunrise bins
+//          (same solar-clock shape as the All profile view)
+//   out -> per DC-input band: energy-weighted efficiency % (right axis,
+//          drawn in the theme's neutral text tone -- never a new accent)
+//          next to temperature (left axis, amber -- the same color the
+//          metric wears in the time view, so one idea keeps one hue)
+// All colors register through themeColors/rgba exactly like the other
+// charts; applyChartTheme() re-points them on toggle.
+let tempView = 'tod';        // 'tod' (vs time of day) | 'out' (vs output)
+let latestTemperature = null;
+
+const tempChart = new Chart(el('tempChart').getContext('2d'), {
+  type: 'line',
+  data: { datasets: [] },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 150 },
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    plugins: {
+      legend: {
+        display: false,
+        position: 'top',
+        align: 'end',
+        labels: {
+          boxWidth: 10, boxHeight: 10, usePointStyle: true,
+          pointStyle: 'circle', padding: 14,
+        },
+      },
+      tooltip: {
+        backgroundColor: '#191c20',
+        borderColor: '#34383f',
+        borderWidth: 1,
+        titleColor: '#e9e7e2',
+        bodyColor: '#9aa1a9',
+        padding: 10,
+      }
+    },
+    scales: {
+      x: { type: 'linear', grid: { color: themeColors.grid, drawTicks: false } },
+      y: { grid: { color: themeColors.grid, drawTicks: false } },
+    }
+  }
+});
+
+const tempMsgEl = el('tempChartMsg');
+function setTempMsg(text){
+  tempMsgEl.textContent = text || '';
+  tempMsgEl.classList.toggle('show', !!text);
+}
+
+function rebuildTemperature(){
+  const tod = latestTemperature?.by_time_of_day ?? [];
+  const bands = latestTemperature?.by_output ?? [];
+  const bw = latestTemperature?.band_watts || 100;
+
+  let datasets, scales, callbacks, legendDisplay;
+
+  if(tempView === 'out'){
+    const pts = bands.map(b => ({
+      x: b.band_w, y: b.temp_avg, mx: b.temp_max, n: b.n,
+    }));
+    const effPts = bands
+      .filter(b => b.eff !== null && b.eff !== undefined)
+      .map(b => ({ x: b.band_w, y: b.eff * 100, n: b.n }));
+
+    datasets = [
+      {
+        label: 'Temperature (°C)',
+        isTempSeries: true,
+        data: pts,
+        yAxisID: 'y',
+        borderColor: rgba(solarRgb, 0.9),
+        backgroundColor: rgba(solarRgb, 0.08),
+        borderWidth: 1.8,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.25,
+        spanGaps: false,
+        fill: true,
+      },
+      {
+        label: 'Efficiency (%)',
+        isEffSeries: true,
+        data: effPts,
+        yAxisID: 'yEff',
+        borderColor: themeColors.text,
+        backgroundColor: 'transparent',
+        borderWidth: 1.8,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.25,
+        spanGaps: false,
+        fill: false,
+      },
+    ];
+    scales = {
+      x: {
+        type: 'linear',
+        min: 0,
+        max: bands.length ? bands[bands.length - 1].band_w + bw : undefined,
+        grid: { color: themeColors.grid, drawTicks: false },
+        ticks: {
+          maxRotation: 0, autoSkipPadding: 20,
+          callback: v => (v >= 1000 ? `${v / 1000}k` : v),
+        },
+        title: { display: true, text: 'DC input (W)', color: themeColors.axisTitle, font:{size:10} },
+      },
+      y: {
+        beginAtZero: false,
+        grace: '12%',
+        grid: { color: themeColors.grid, drawTicks: false },
+        title: { display: true, text: '°C', color: themeColors.axisTitle, font:{size:10} },
+      },
+      yEff: {
+        position: 'right',
+        beginAtZero: false,
+        grace: '12%',
+        grid: { display: false }, // keep the left axis' grid only
+        title: { display: true, text: 'efficiency', color: themeColors.axisTitle, font:{size:10} },
+        ticks: { callback: v => `${Math.round(v)}%` },
+      },
+    };
+    callbacks = {
+      title: items => {
+        const p = items[0]?.raw;
+        return p ? `DC input ${p.x}–${p.x + bw} W` : '';
+      },
+      label: item => {
+        const p = item.raw;
+        if(item.dataset.isEffSeries) return ` eff ≈ ${fmt(p.y, 1)}%`;
+        return ` ${fmt(p.y, 1)}°C avg · ${fmt(p.mx, 1)}°C max`;
+      },
+      afterBody: items => {
+        const p = items[0]?.raw;
+        return p && p.n ? [`from ${p.n} sample${p.n === 1 ? '' : 's'}`] : [];
+      },
+    };
+    legendDisplay = true;
+  } else {
+    // Time-of-day lens: single amber series on the shared solar clock.
+    datasets = [
+      {
+        label: 'Temperature (°C)',
+        isTempSeries: true,
+        data: tod.map(b => ({ x: b.o, y: b.temp_avg, mx: b.temp_max, n: b.n })),
+        yAxisID: 'y',
+        borderColor: rgba(solarRgb, 0.9),
+        backgroundColor: rgba(solarRgb, 0.08),
+        borderWidth: 1.8,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.25,
+        spanGaps: false,
+        fill: true,
+      },
+    ];
+    scales = {
+      x: solarAxisConfig(tod.length ? tod[tod.length - 1].o : 12 * 3600),
+      y: {
+        beginAtZero: false,
+        grace: '12%',
+        grid: { color: themeColors.grid, drawTicks: false },
+        title: { display: true, text: '°C', color: themeColors.axisTitle, font:{size:10} },
+      },
+    };
+    callbacks = {
+      title: items => {
+        const p = items[0]?.raw;
+        return p ? `${fmtSolarOffset(p.x)} after sunrise` : '';
+      },
+      label: item => {
+        const p = item.raw;
+        return p.y === null || p.y === undefined
+          ? ''
+          : ` ${fmt(p.y, 1)}°C avg · ${fmt(p.mx, 1)}°C max`;
+      },
+      afterBody: items => {
+        const p = items[0]?.raw;
+        return p && p.n ? [`from ${p.n} sample${p.n === 1 ? '' : 's'}`] : [];
+      },
+    };
+    legendDisplay = false;
+  }
+
+  tempChart.data.datasets = datasets;
+  tempChart.options.scales = scales;
+  tempChart.options.plugins.legend.display = legendDisplay;
+  Object.assign(tempChart.options.plugins.tooltip, { callbacks });
+
+  // Honest empty state: a single bin can't draw a trend (points are
+  // radius-0), so anything below two bins/bands reports as collecting-data
+  // even though the stat rows above may already carry real numbers.
+  const drawable = tempView === 'out'
+    ? bands.length >= 2
+    : tod.length >= 2;
+  setTempMsg(
+    latestTemperature ? (drawable ? null : 'Not enough data yet') : ''
+  );
+}
+
+function renderTemperature(payload){
+  if(!payload || payload.error) return;
+  latestTemperature = payload;
+  if(tempView !== 'tod' && tempView !== 'out') tempView = 'tod';
+  rebuildTemperature();
+  tempChart.update();
+}
+
+// Switch lenses using the already-fetched payload -- no refetch.
+function setTemperatureView(view){
+  if(view !== 'tod' && view !== 'out') return;
+  tempView = view;
+  if(!latestTemperature) return; // first load renders in this view directly
+  rebuildTemperature();
+  tempChart.update();
+}
+
 // ---------- Theme switching ----------
 // Re-points every hardcoded canvas color and refreshes the live chart
 // instances without animation so grids/axes/tooltips/legends follow the
@@ -1141,6 +1363,7 @@ function applyChartTheme(themeName){
   Object.assign(powerChart.options.plugins.tooltip, tooltip);
   Object.assign(cumulativeChart.options.plugins.tooltip, tooltip);
   Object.assign(monthlyChart.options.plugins.tooltip, tooltip);
+  Object.assign(tempChart.options.plugins.tooltip, tooltip);
 
   // Series colors live on the datasets; re-point them so bars/lines/fills
   // follow the theme without waiting for the next data render.
@@ -1153,8 +1376,10 @@ function applyChartTheme(themeName){
   }
   // Monthly's per-bar alphas derive from the live rgb values, so rebuild.
   if(latestMonthly) rebuildMonthly();
+  // Temperature's series colors are embedded at rebuild time as well.
+  if(latestTemperature) rebuildTemperature();
 
-  for(const chart of [powerChart, dailyChart, cumulativeChart, monthlyChart]){
+  for(const chart of [powerChart, dailyChart, cumulativeChart, monthlyChart, tempChart]){
     for(const scale of Object.values(chart.options.scales)){
       if(scale.grid) scale.grid.color = c.grid;
       if(scale.title?.color) scale.title.color = c.axisTitle;
@@ -1167,4 +1392,5 @@ export {
   renderHistory, renderSessions, renderProfile, appendLivePoint,
   renderDailySummary, renderCumulative, setCumulativeRange,
   renderMonthly, setMonthlyRange, applyChartTheme,
-  loadTodayProjection, updatePaceTag };
+  loadTodayProjection, updatePaceTag,
+  renderTemperature, setTemperatureView };

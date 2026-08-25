@@ -596,6 +596,18 @@ def get_readings_time_span() -> tuple[Optional[str], Optional[str]]:
         conn.close()
 
 
+def _load_sun_windows(
+    conn: sqlite3.Connection, windows: list[tuple[str, str]]
+) -> None:
+    """Fill the per-connection temp table used by the daylight JOINs."""
+    conn.execute(
+        "CREATE TEMP TABLE IF NOT EXISTS sun_windows ("
+        "  sunrise TEXT PRIMARY KEY, sunset TEXT NOT NULL)"
+    )
+    conn.execute("DELETE FROM sun_windows")
+    conn.executemany("INSERT INTO sun_windows VALUES (?, ?)", windows)
+
+
 def aggregate_solar_profile(
     windows: list[tuple[str, str]], bin_seconds: int
 ) -> list[dict]:
@@ -613,12 +625,7 @@ def aggregate_solar_profile(
         return []
     conn = _connect()
     try:
-        conn.execute(
-            "CREATE TEMP TABLE IF NOT EXISTS sun_windows ("
-            "  sunrise TEXT PRIMARY KEY, sunset TEXT NOT NULL)"
-        )
-        conn.execute("DELETE FROM sun_windows")
-        conn.executemany("INSERT INTO sun_windows VALUES (?, ?)", windows)
+        _load_sun_windows(conn, windows)
         rows = conn.execute(
             """
             SELECT
@@ -644,6 +651,198 @@ def aggregate_solar_profile(
         {"o": r["bin"] * bin_seconds, "s_avg": r["s_avg"], "i_avg": r["i_avg"], "n": r["n"]}
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Temperature analytics
+# ---------------------------------------------------------------------------
+# Defensive sensor-quirk guard: readings with an implausible temperature
+# (stuck sensor, register glitch) never enter any aggregate. Real inverter
+# internal temps live far inside this window.
+TEMP_MIN_PLAUSIBLE_C = -20.0
+TEMP_MAX_PLAUSIBLE_C = 110.0
+
+# Width of the solar_input bands for the temperature-vs-output view (W).
+TEMP_OUTPUT_BAND_WATTS = 100
+
+
+def aggregate_temperature_by_output(
+    windows: list[tuple[str, str]],
+    band_watts: int = TEMP_OUTPUT_BAND_WATTS,
+) -> list[dict]:
+    """
+    Daylight readings banded by DC `solar_input` (fixed `band_watts` bins):
+
+        band      lowest solar_input covered by the band (W)
+        temp_avg / temp_max   inverter internal temperature in the band
+        power_avg             avg AC output in the band
+        eff                   SUM(inverter_power) / SUM(solar_input) --
+                              energy-weighted, not average-of-ratios, so
+                              noisy dawn/dusk ratios can't dominate a band
+        n                     sample count
+
+    Same sun-window JOIN as aggregate_solar_profile; night readings are
+    excluded by construction. Rows missing any of the three measures are
+    skipped outright.
+    """
+    if not windows:
+        return []
+    conn = _connect()
+    try:
+        _load_sun_windows(conn, windows)
+        rows = conn.execute(
+            """
+            SELECT CAST(r.solar_input / ? AS INTEGER) AS band,
+                   AVG(r.temperature)     AS temp_avg,
+                   MAX(r.temperature)     AS temp_max,
+                   AVG(r.inverter_power)  AS power_avg,
+                   SUM(r.inverter_power)  AS p_sum,
+                   SUM(r.solar_input)     AS s_sum,
+                   COUNT(*)               AS n
+            FROM readings r
+            JOIN sun_windows w
+              ON r.timestamp BETWEEN w.sunrise AND w.sunset
+            WHERE r.temperature BETWEEN ? AND ?
+              AND r.solar_input IS NOT NULL
+              AND r.inverter_power IS NOT NULL
+            GROUP BY band
+            HAVING band >= 0
+            ORDER BY band ASC
+            """,
+            (band_watts, TEMP_MIN_PLAUSIBLE_C, TEMP_MAX_PLAUSIBLE_C),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "band_w": r["band"] * band_watts,
+            "temp_avg": r["temp_avg"],
+            "temp_max": r["temp_max"],
+            "power_avg": r["power_avg"],
+            "eff": (r["p_sum"] / r["s_sum"]) if r["s_sum"] else None,
+            "n": r["n"],
+        }
+        for r in rows
+    ]
+
+
+def aggregate_temperature_by_time(
+    windows: list[tuple[str, str]], bin_seconds: int
+) -> list[dict]:
+    """
+    Avg/max inverter temperature vs position within the solar day -- mirrors
+    the solar-profile shape ({o: seconds-after-sunrise bins}), so both curves
+    can share one mental model. Missing bins stay absent; nothing fabricated.
+    """
+    if not windows:
+        return []
+    conn = _connect()
+    try:
+        _load_sun_windows(conn, windows)
+        rows = conn.execute(
+            """
+            SELECT CAST((julianday(r.timestamp) - julianday(w.sunrise)) * 86400
+                        / ? AS INTEGER) AS bin,
+                   AVG(r.temperature) AS temp_avg,
+                   MAX(r.temperature) AS temp_max,
+                   COUNT(*)           AS n
+            FROM readings r
+            JOIN sun_windows w
+              ON r.timestamp BETWEEN w.sunrise AND w.sunset
+            WHERE r.temperature BETWEEN ? AND ?
+            GROUP BY bin
+            HAVING bin >= 0
+            ORDER BY bin ASC
+            """,
+            (bin_seconds, TEMP_MIN_PLAUSIBLE_C, TEMP_MAX_PLAUSIBLE_C),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "o": r["bin"] * bin_seconds,
+            "temp_avg": r["temp_avg"],
+            "temp_max": r["temp_max"],
+            "n": r["n"],
+        }
+        for r in rows
+    ]
+
+
+def get_temperature_records(today_since: Optional[str] = None) -> dict:
+    """
+    Temperature records spanning ALL history:
+
+        today_max    MAX(temperature) since `today_since` (today's sunrise
+                     cutoff) -- None before the first reading of the day;
+                     night residuals never count because polling is asleep
+        all_time_max hottest sample ever, across readings_daily
+                     .temperature_max (post-retention history) AND the raw
+                     table (recent days not yet downsampled)
+        hottest_day  {date, temp_max} of the hottest day on record, chosen
+                     by the same union (ties -> the more recent day)
+
+    No fabrication: every field is null when its source has no data yet.
+    """
+    conn = _connect()
+    try:
+        today_row = None
+        if today_since:
+            today_row = conn.execute(
+                """
+                SELECT MAX(temperature) AS t FROM readings
+                WHERE timestamp >= ? AND temperature IS NOT NULL
+                """,
+                (today_since,),
+            ).fetchone()
+
+        all_time_row = conn.execute(
+            """
+            SELECT MAX(t) AS t FROM (
+                SELECT MAX(temperature_max) AS t FROM readings_daily
+                WHERE temperature_max IS NOT NULL
+                UNION ALL
+                SELECT MAX(temperature) AS t FROM readings
+                WHERE temperature IS NOT NULL
+            )
+            """
+        ).fetchone()
+
+        daily_hot = conn.execute(
+            """
+            SELECT day, temperature_max AS t FROM readings_daily
+            WHERE temperature_max IS NOT NULL
+            ORDER BY temperature_max DESC, day DESC LIMIT 1
+            """
+        ).fetchone()
+        raw_hot = conn.execute(
+            """
+            SELECT date(timestamp) AS day, MAX(temperature) AS t
+            FROM readings
+            WHERE temperature IS NOT NULL
+            GROUP BY date(timestamp)
+            ORDER BY t DESC, day DESC LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+
+    candidates = []
+    if daily_hot and daily_hot["t"] is not None:
+        candidates.append((daily_hot["t"], daily_hot["day"]))
+    if raw_hot and raw_hot["t"] is not None:
+        candidates.append((raw_hot["t"], raw_hot["day"]))
+    hottest = max(candidates) if candidates else None
+
+    return {
+        "today_max": today_row["t"] if today_row else None,
+        "all_time_max": all_time_row["t"] if all_time_row else None,
+        "hottest_day": (
+            {"date": hottest[1], "temp_max": hottest[0]} if hottest else None
+        ),
+    }
 
 
 def _history_hourly(since_iso: str) -> list[dict]:

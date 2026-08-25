@@ -852,6 +852,18 @@ select:hover{ color: var(--text); }
   margin-top: 10px;
 }
 
+/* Temperature panel: its meta rows lead the panel body, so the list's top
+   hairline would double the panel head's border-bottom. Layout-only fix,
+   same pattern as the rule above. */
+.panel-body > .meta-list:first-child{
+  border-top: none;
+  margin-top: 0;
+}
+
+.insight-sub + .insight-sub{
+  margin-top: 4px;
+}
+
 /* ==========================================================================
    Footer
    ========================================================================== */

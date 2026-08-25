@@ -374,6 +374,39 @@
         </div>
       </div>
 
+      <!-- Temperature -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title" title="Inverter internal (heatsink) temperature — not ambient air">Temperature</h3>
+          <div class="range-toggle" id="tempViewToggle" title="Inverter heatsink sensor — not ambient air. Profiles cover the raw-data window; the record spans all history.">
+            <button data-view="tod">Time</button>
+            <button data-view="out">Output</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <dl class="meta-list">
+            <div class="meta-row">
+              <dt>Current</dt>
+              <dd id="tempNow">–</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Today Max</dt>
+              <dd id="tempTodayMax">–</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Record</dt>
+              <dd id="tempRecord">–</dd>
+            </div>
+          </dl>
+          <p class="insight-sub" id="tempLabel">inverter heatsink sensor · not ambient air</p>
+          <p class="insight-sub" id="tempNote" hidden></p>
+        </div>
+        <div class="chart-holder small">
+          <canvas id="tempChart"></canvas>
+          <div class="chart-msg" id="tempChartMsg"></div>
+        </div>
+      </div>
+
     </aside>
 
   </main>

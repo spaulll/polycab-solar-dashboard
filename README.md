@@ -85,6 +85,7 @@ solar-dashboard/
 │   ├── ui.js             # Status pills, night banner, stat cards
 │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
 │   ├── impact.js           # Savings & Impact panel (money saved + CO2 avoided)
+│   ├── temperature.js      # Temperature panel (stats rows, lens toggle, derating note)
 │   ├── weather.js        # Weather chip + popup UI
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
@@ -240,6 +241,23 @@ directory (path controlled by `DB_PATH`). The schema is created via
   night mode ends — identical lifecycle to the KPI strip. Large amounts
   format compactly in Indian units (₹1,110 → ₹1.24 L → ₹2.31 Cr).
 
+- **Temperature panel**: the last sidebar panel (below Savings & Impact),
+  making the collected-but-previously-unused `temperature` register
+  analytical. Three stat rows — Current (live WebSocket reading), Today Max
+  and Record (all-time, with the hottest day's date in the tooltip) — over a
+  small chart with a two-lens toggle: **Time** plots avg/max internal
+  temperature against position within the solar day (same sunrise-anchored
+  shape as the All profile view; the afternoon peak visibly lags solar noon),
+  **Output** plots temperature next to energy-weighted DC→AC efficiency per
+  100 W input band (dual axis) to expose heat/output derating. When the top
+  solid band's efficiency falls >2 percentage points below mid-range bands,
+  a muted informational note appears. The sensor measures the inverter's own
+  heatsink, not ambient air (stated in the panel), detailed profiles cover
+  only the raw retention window while the record spans all history, and
+  implausible samples are ignored defensively. Aggregates are computed
+  server-side in SQLite (`/api/insights/temperature`, cached 15 min); the
+  panel refreshes on the Daily Energy Log cadence and after night mode ends.
+
 - **Weather chip** (`weather.py` + `frontend/js/weather.js`): a small
   icon+temperature chip in the top bar — no permanent weather card. Clicking
   it opens a popup (with a dimmed, backdrop-blurred background; click the
@@ -264,6 +282,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries an `impact{}` block for the Savings & Impact panel (`tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂ kg/t, computed live at the current rates; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the dashboard's Generation KPI strip |
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
 | `GET /api/generation/monthly?months=N` | Monthly energy totals in kWh (`{month: "YYYY-MM", kwh, days_with_data}`, ascending), bucketed server-side from the exact same day series as the Daily Energy Log / KPI strip — a month's total always equals the sum of that month's daily bars. Also returns `first_month` (earliest month with data across all history) and `yoy_available` (true once a same-month-last-year pair exists, i.e. ≥ 13 months of history). `months` selects the most recent N months to return (default 24); `days_with_data` lets gap months be annotated instead of silently averaged. Backs the Monthly Energy chart |
+| `GET /api/insights/temperature?bin_minutes=M` | Inverter temperature analytics over **daylight readings only** (same sun-window join as the solar profile; night residuals never count). Returns `by_time_of_day` (avg/max internal temperature vs seconds-after-sunrise bins), `by_output` (readings banded by DC solar input in 100 W bands with avg/max temperature, avg AC power and the energy-weighted DC→AC efficiency `SUM(P_ac)/SUM(P_dc)` per band — reveals derating at high output + heat) and `records` (today's max from the sunrise cutoff, all-time max and hottest day `{date, temp_max}` spanning all history via permanent daily aggregates). Implausible samples (< −20 °C or > 110 °C, e.g. a stuck sensor) are filtered defensively. The time-of-day profile covers the raw retention window only; cached in-process per bin size for 15 minutes. Backs the sidebar Temperature panel |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |

@@ -445,6 +445,33 @@ async def api_insights_peak(
     return {"range": range, **(peak or {})}
 
 
+@app.get("/api/insights/temperature")
+async def api_insights_temperature(
+    bin_minutes: int = Query(
+        15, ge=5, le=60,
+        description="Width of the time-of-day temperature bins in minutes",
+    ),
+):
+    """
+    Inverter temperature analytics over daylight readings only:
+
+      by_time_of_day  avg/max internal temperature vs seconds-after-sunrise
+                      bins (same shape as the solar profile; raw-detail
+                      window only)
+      by_output       readings banded by DC solar_input (100 W bands) with
+                      avg/max temperature, avg AC power and the
+                      energy-weighted DC->AC efficiency SUM(P_ac)/SUM(P_dc)
+                      per band -- reveals derating at high output + heat
+      records         today's max (sunrise cutoff), all-time max and the
+                      hottest day on record (readings_daily covers history
+                      beyond the raw retention window)
+
+    Cached in-process per bin size for 15 minutes. The temperature register
+    is the inverter's internal/heatsink sensor, NOT ambient air.
+    """
+    return await asyncio.to_thread(solar.get_temperature_analytics, bin_minutes)
+
+
 @app.get("/api/today/projection")
 async def api_today_projection():
     """
