@@ -313,12 +313,12 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-3) var(--space-4) var(--space-3);
+  padding: var(--space-3) var(--space-4) 22px; /* extra bottom offset balances the raised text block */
   margin-bottom: 0;
 }
 
 .sun-arc-plot{
-  width: min(100%, 230px);
+  width: min(100%, 275px);
   color: var(--accent);
 }
 
@@ -344,7 +344,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   .sun-halo{ animation: none; }
 }
 
-/* Countdown: the card's hero figure, tucked close under the dial. */
+/* Countdown: the card's hero figure, sitting INSIDE the arch. */
 .sun-arc-countdown{
   display: flex;
   flex-direction: column;
@@ -352,7 +352,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   gap: 1px;
   text-align: center;
   min-width: 0;
-  margin-top: calc(-1 * var(--space-4));
+  margin-top: -63px;
 }
 
 .sun-countdown-value{
@@ -372,7 +372,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  margin-top: var(--space-1);
+  margin-top: 2px;
 }
 
 .arc-endpoint{

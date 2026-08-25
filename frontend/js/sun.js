@@ -19,9 +19,11 @@ const card = el('sunArcCard');
 
 // Geometry (viewBox units). One semicircle serves both modes: the marker
 // sweeps it clockwise by day (sunrise -> sunset) and anti-clockwise by
-// night (sunset -> back to sunrise along the same path).
+// night (sunset -> back to sunrise along the same path). The arc spans
+// nearly the full card width; the countdown/times text overlaps its lower
+// interior via negative margins (see styles.css).
 const W = 240, H = 132;
-const CX = 120, CY = 124, R = 102;
+const CX = 120, CY = 124, R = 112;
 
 let sunTargetSunrise = null; // Date — next sunrise
 let sunTargetSunset = null;  // Date — next sunset
