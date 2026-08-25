@@ -1,10 +1,10 @@
 // Sun path card: an instrument-grade SVG semicircle tracing today's sun
-// arc -- hour ticks on a faint track, a gradient "elapsed" stroke with a
-// soft area wash beneath it, and a glowing "now" marker. On first data the
-// marker sweeps in from sunrise; afterwards it glides continuously as the
-// one-second ticks advance. At night the marker rides a dashed moon path
-// below the horizon and the countdown flips to sunrise. Astral data still
-// comes exclusively from the server (/api/sun); this module only renders it.
+// arc -- hour ticks on a faint track, a gradient "elapsed" stroke, and a
+// glowing "now" marker. The marker sweeps the SAME arc in both modes:
+// clockwise by day (sunrise -> sunset), anti-clockwise by night (sunset
+// -> sunrise), so dusk and dawn are continuous hand-offs. On first data
+// it sweeps in from the sunrise end and then glides as the one-second
+// ticks advance. Astral data comes exclusively from the server (/api/sun).
 
 import { SUN_COUNTDOWN_TICK_MS } from './config.js';
 import { fmtClock, fmtDuration } from './format.js';
@@ -17,10 +17,11 @@ const el = id => document.getElementById(id);
 const plot = el('sunArcPlot');
 const card = el('sunArcCard');
 
-// Geometry (viewBox units). Slim reserve below the horizon hosts the night
-// moon path; the day composition ends at the endpoint dots.
-const W = 240, H = 148;
-const CX = 120, CY = 124, R = 102, RM = 22;
+// Geometry (viewBox units). One semicircle serves both modes: the marker
+// sweeps it clockwise by day (sunrise -> sunset) and anti-clockwise by
+// night (sunset -> back to sunrise along the same path).
+const W = 240, H = 132;
+const CX = 120, CY = 124, R = 102;
 
 let sunTargetSunrise = null; // Date — next sunrise
 let sunTargetSunset = null;  // Date — next sunset
@@ -91,14 +92,6 @@ function buildArc(){
     'stroke-width': 7, 'stroke-linecap': 'round', opacity: 0,
   });
 
-  // Dashed moon path below the horizon (night only).
-  const moon = svgEl('path', {
-    d: `M ${CX - RM} ${CY} A ${RM} ${RM} 0 0 0 ${CX + RM} ${CY}`,
-    fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5,
-    'stroke-dasharray': '1 6', 'stroke-linecap': 'round', opacity: 0,
-    class: 'sun-arc-moon',
-  });
-
   // Solid endpoint dots anchoring the arc ends.
   const endDots = svgEl('g', { fill: 'currentColor' });
   for(const a of [Math.PI, 0]){
@@ -111,47 +104,45 @@ function buildArc(){
   const disc = svgEl('circle', { r: 8.5, fill: 'currentColor' });
   const marker = svgEl('g', { class: 'sun-marker' }, [halo, disc]);
 
-  svg.append(wash, track, ticks, moon, elapsed, endDots, marker);
+  svg.append(wash, track, ticks, elapsed, endDots, marker);
   plot.appendChild(svg);
 
-  els = { wash, elapsed, moon, marker };
+  els = { wash, elapsed, marker };
 }
 
-// Render everything from a marker angle in [0, PI]. Day: the angle is the
-// sun's position on the day arc. Night: same parameter drives the moon's
-// progress along the below-horizon path (PI = just set, 0 = about to rise).
+// Render everything from a marker angle in [0, PI]. Day: the angle runs
+// PI (sunrise) -> 0 (sunset), clockwise over the top. Night: the same
+// angle runs 0 (sunset) -> PI (sunrise), anti-clockwise along the same
+// arc -- one path, two directions.
 function draw(a){
   if(!els) return;
   const night = sunIsNight;
-  els.moon.setAttribute('opacity', night ? 0.5 : 0);
-  els.marker.classList.toggle('moon', night);
+  els.marker.classList.toggle('night', night);
 
   if(night){
     els.wash.setAttribute('opacity', 0);
     els.elapsed.setAttribute('opacity', 0);
-    const [x, y] = [CX + RM * Math.cos(a), CY + RM * Math.sin(a)];
-    els.marker.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
-    return;
-  }
-
-  els.wash.setAttribute('opacity', 1);
-  const frac = 1 - a / Math.PI;
-  const [mx, my] = polar(R, a);
-  if(frac > 0.004){
-    els.elapsed.setAttribute('d',
-      `M ${(CX - R).toFixed(2)} ${CY} A ${R} ${R} 0 0 1 ${mx.toFixed(2)} ${my.toFixed(2)}`);
-    els.elapsed.setAttribute('opacity', 1);
   }else{
-    els.elapsed.setAttribute('d', '');
-    els.elapsed.setAttribute('opacity', 0);
+    els.wash.setAttribute('opacity', 1);
+    const frac = 1 - a / Math.PI;
+    const [mx, my] = polar(R, a);
+    if(frac > 0.004){
+      els.elapsed.setAttribute('d',
+        `M ${(CX - R).toFixed(2)} ${CY} A ${R} ${R} 0 0 1 ${mx.toFixed(2)} ${my.toFixed(2)}`);
+      els.elapsed.setAttribute('opacity', 1);
+    }else{
+      els.elapsed.setAttribute('d', '');
+      els.elapsed.setAttribute('opacity', 0);
+    }
   }
-  els.marker.setAttribute('transform', `translate(${mx.toFixed(2)} ${my.toFixed(2)})`);
+  const [x, y] = polar(R, a);
+  els.marker.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
 }
 
 // Tween the marker between angles. Per-second ticks use a linear 1s glide
-// so motion is continuous; first data and dawn sweeps start from the
-// sunrise end with an ease-out (dusk stays continuous: the moon picks up
-// where the sun left off). Reduced motion snaps instantly.
+// so motion is continuous; the first paint sweeps in from the sunrise end
+// with an ease-out. Mode flips need no special casing -- day and night
+// meet at the same arc ends. Reduced motion snaps instantly.
 function animateTo(target, dur, ease, startOverride){
   cancelAnimationFrame(animId);
   const from = startOverride ?? angle ?? Math.PI;
@@ -193,7 +184,8 @@ function tickSunCountdown(){
   const secondsLeft = (target - now) / 1000;
   el('sunCountdown').textContent = fmtDuration(secondsLeft);
 
-  // Marker progress along the active path.
+  // Marker progress. Day: sunrise->sunset maps to angle PI->0 (clockwise).
+  // Night: sunset->sunrise maps to angle 0->PI (anti-clockwise, same arc).
   let progress = 0;
   if(sunIsNight){
     const start = daySunset && daySunset < now ? daySunset : null;
@@ -206,13 +198,14 @@ function tickSunCountdown(){
   card.classList.toggle('night', sunIsNight);
   if(!els) buildArc();
 
-  // Mode flip or first paint: sweep in. Dawn restarts from the sunrise
-  // end; dusk lets the moon continue from the sun's last position.
+  // Mode flips are naturally continuous now (both meet at the arc ends):
+  // only the first paint sweeps in, from the sunrise end.
   const mode = sunIsNight ? 'night' : 'day';
   const sweep = lastMode !== mode || angle === null;
-  const sweepStart = sweep && !sunIsNight ? Math.PI : undefined;
+  const sweepStart = angle === null ? Math.PI : undefined;
   lastMode = mode;
-  animateTo(Math.PI * (1 - progress), sweep ? 1400 : 1000,
+  animateTo(sunIsNight ? Math.PI * progress : Math.PI * (1 - progress),
+    sweep ? 1400 : 1000,
     sweep ? easeOutCubic : t => t, sweepStart);
 
   // If the countdown reaches zero, refresh from the server to flip
