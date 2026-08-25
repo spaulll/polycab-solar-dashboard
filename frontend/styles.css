@@ -299,63 +299,70 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 }
 
 /* ==========================================================================
-    Sun path card — SVG arc + countdown
+    Sun path card — SVG instrument dial + countdown
    ========================================================================== */
 
 .sun-arc-card{
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-5);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-3);
   margin-bottom: var(--space-4);
 }
 
 .sun-arc-plot{
-  width: 132px;
-  flex: none;
+  width: min(100%, 300px);
   color: var(--accent);
 }
 
+.sun-arc-plot svg{ display: block; width: 100%; height: auto; }
+
 .sun-arc-card.night .sun-arc-plot{ color: var(--night); }
 
-/* The marker glides as its coordinates update once per second. */
-.sun-arc-now{ transition: cx var(--dur-med) linear, cy var(--dur-med) linear; }
-
-@media (prefers-reduced-motion: reduce){
-  .sun-arc-now{ transition: none; }
+/* The halo breathes softly; the disc itself stays still. */
+.sun-halo{
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo-pulse 3.2s ease-in-out infinite;
 }
 
+.sun-marker.moon .sun-halo{ animation-duration: 5s; opacity: 0.6; }
+
+@keyframes halo-pulse{
+  0%, 100%{ transform: scale(1); opacity: 1; }
+  50%{ transform: scale(1.25); opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sun-halo{ animation: none; }
+}
+
+/* Label row: sunrise | countdown | sunset, aligned under the dial. */
 .sun-arc-data{
+  width: min(100%, 300px);
   display: flex;
-  align-items: baseline;
-  gap: var(--space-5);
-  flex-wrap: wrap;
-  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.arc-endpoint{
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.sun-countdown{
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-left: auto;
-}
-
-.rail-item{
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-
 .rail-icon{
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   color: var(--faint);
-  align-self: center;
+  flex: none;
 }
 
 .rail-label{
@@ -369,9 +376,26 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   font-family: var(--mono);
   font-size: var(--font-size-2);
   color: var(--dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .rail-value.accent{ color: var(--accent); }
+
+.sun-countdown{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+
+.sun-countdown .rail-value{
+  font-size: var(--font-size-4);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
 
 .rail-sep{
   width: 1px;
@@ -1588,11 +1612,9 @@ footer{
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
-  /* --- Sun path card: stack plot over data on narrow screens --- */
-  .sun-arc-card{ flex-direction: column; align-items: stretch; gap: var(--space-2); }
-  .sun-arc-plot{ width: 116px; margin: 0 auto; }
-  .sun-arc-data{ gap: var(--space-3) var(--space-4); justify-content: space-between; }
-  .sun-countdown{ margin-left: 0; }
+  /* --- Sun path card: slightly smaller dial, labels keep the rhythm --- */
+  .sun-arc-plot,
+  .sun-arc-data{ width: min(100%, 260px); }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
          longest realistic readings on one line at 320px --- */
