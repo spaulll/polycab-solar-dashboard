@@ -208,24 +208,25 @@
   <!-- ============ Live view: now-moments + today's chart + status ============ -->
   <section class="view active" data-view="live">
 
-  <!-- ================= Sun rail ================= -->
-  <div class="sun-rail">
-    <span class="rail-item">
-      <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunrise"/></svg>
-      <span class="rail-label">Sunrise</span>
-      <span class="rail-value" id="sunNextSunrise">–</span>
-    </span>
-    <span class="rail-sep" aria-hidden="true"></span>
-    <span class="rail-item">
-      <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunset"/></svg>
-      <span class="rail-label">Sunset</span>
-      <span class="rail-value" id="sunNextSunset">–</span>
-    </span>
-    <span class="rail-sep" aria-hidden="true"></span>
-    <span class="rail-item rail-countdown">
-      <span class="rail-label" id="sunCountdownLabel">Time to sunset</span>
-      <span class="rail-value accent" id="sunCountdown">–</span>
-    </span>
+  <!-- ================= Sun path ================= -->
+  <div class="sun-arc-card" id="sunArcCard">
+    <div class="sun-arc-plot" id="sunArcPlot" role="img" aria-label="Today's sun path"></div>
+    <div class="sun-arc-data">
+      <span class="rail-item">
+        <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunrise"/></svg>
+        <span class="rail-label">Sunrise</span>
+        <span class="rail-value" id="sunNextSunrise">–</span>
+      </span>
+      <span class="sun-countdown">
+        <span class="rail-label" id="sunCountdownLabel">Time to sunset</span>
+        <span class="rail-value accent" id="sunCountdown">–</span>
+      </span>
+      <span class="rail-item">
+        <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunset"/></svg>
+        <span class="rail-label">Sunset</span>
+        <span class="rail-value" id="sunNextSunset">–</span>
+      </span>
+    </div>
   </div>
 
   <!-- ================= Night banner ================= -->
@@ -236,29 +237,34 @@
 
   <!-- ================= Live stat strip ================= -->
   <section class="stats">
-    <article class="stat-card solar">
+    <article class="stat-card solar" data-tile="Solar_Input">
       <h2 class="stat-label">Solar Input</h2>
-      <p class="stat-value" id="statSolar">–<span class="unit">W</span></p>
+      <p class="stat-value"><span class="num" id="statSolar">–</span><span class="unit">W</span></p>
+      <div class="spark" aria-hidden="true"></div>
     </article>
-    <article class="stat-card">
+    <article class="stat-card" data-tile="L1_Voltage L1_Current">
       <h2 class="stat-label">Grid V / A</h2>
-      <p class="stat-value combo" id="statGrid">–<span class="unit">V</span> <span class="sep">/</span> –<span class="unit">A</span></p>
+      <p class="stat-value combo"><span class="num" id="statGridV">–</span><span class="unit">V</span> <span class="sep">/</span> <span class="num" id="statGridA">–</span><span class="unit">A</span></p>
+      <div class="spark" aria-hidden="true"></div>
     </article>
-    <article class="stat-card">
+    <article class="stat-card" data-tile="Inverter_Power">
       <h2 class="stat-label">Inverter Power</h2>
-      <p class="stat-value" id="statInvPower">–<span class="unit">W</span></p>
+      <p class="stat-value"><span class="num" id="statInvPower">–</span><span class="unit">W</span></p>
+      <div class="spark" aria-hidden="true"></div>
     </article>
-    <article class="stat-card">
+    <article class="stat-card" data-tile="Temperature">
       <h2 class="stat-label">Temperature</h2>
-      <p class="stat-value" id="statTemp">–<span class="unit">°C</span></p>
+      <p class="stat-value"><span class="num" id="statTemp">–</span><span class="unit">°C</span></p>
+      <div class="spark" aria-hidden="true"></div>
     </article>
-    <article class="stat-card solar">
+    <article class="stat-card solar" data-tile="E_Today">
       <h2 class="stat-label">Energy Today</h2>
-      <p class="stat-value" id="statToday">–<span class="unit">kWh</span></p>
+      <p class="stat-value"><span class="num" id="statToday">–</span><span class="unit">kWh</span></p>
+      <div class="spark" aria-hidden="true"></div>
     </article>
     <article class="stat-card">
       <h2 class="stat-label">Lifetime Energy</h2>
-      <p class="stat-value" id="statLifetime">–<span class="unit">kWh</span></p>
+      <p class="stat-value"><span class="num" id="statLifetime">–</span><span class="unit">kWh</span></p>
     </article>
   </section>
 
@@ -333,30 +339,30 @@
   <section class="gen-strip" aria-label="Generation summary">
     <article class="gen-card">
       <h2 class="gen-label">Today</h2>
-      <p class="gen-value accent" id="genToday">–</p>
+      <p class="gen-value accent"><span class="num" id="genToday">–</span><span class="unit"></span></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">Yesterday</h2>
-      <p class="gen-value" id="genYesterday">–</p>
+      <p class="gen-value"><span class="num" id="genYesterday">–</span><span class="unit"></span></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">This Week</h2>
-      <p class="gen-value" id="genWeek">–</p>
+      <p class="gen-value"><span class="num" id="genWeek">–</span><span class="unit"></span></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">This Month</h2>
-      <p class="gen-value" id="genMonth">–</p>
+      <p class="gen-value"><span class="num" id="genMonth">–</span><span class="unit"></span></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">This Year</h2>
-      <p class="gen-value" id="genYear">–</p>
+      <p class="gen-value"><span class="num" id="genYear">–</span><span class="unit"></span></p>
     </article>
     <article class="gen-card wide" title="Small differences are normal. Calculated Production is the sum of daily totals stored in this dashboard, while Inverter Lifetime is the running total reported directly by the inverter. Gaps can come from partial days, reset timing, rounding, or data recorded before the dashboard started.">
       <h2 class="gen-label">Calculated Production</h2>
-      <p class="gen-value accent" id="genCalculated">–</p>
+      <p class="gen-value accent"><span class="num" id="genCalculated">–</span><span class="unit"></span></p>
       <p class="gen-alt">
         <span class="gen-alt-label">Inverter Lifetime</span>
-        <span id="genInverterLifetime">–</span><span class="asterisk">*</span>
+        <span class="num" id="genInverterLifetime">–</span><span id="genInverterLifetimeUnit"></span><span class="asterisk">*</span>
       </p>
     </article>
   </section>
