@@ -145,6 +145,11 @@ def get_sun_info() -> dict:
     return {
         "next_sunrise": next_sunrise.isoformat(),
         "next_sunset": next_sunset.isoformat(),
+        # Today's actual daylight window (tomorrow's date fields when the
+        # day has ended). Additive: lets clients place a "now" marker on the
+        # true day arc without deriving it from countdown arithmetic.
+        "sunrise": s_today["sunrise"].isoformat(),
+        "sunset": s_today["sunset"].isoformat(),
         "seconds_until_sunrise": seconds_until_sunrise,
         "seconds_until_sunset": seconds_until_sunset,
         "is_night": is_currently_night,
