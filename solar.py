@@ -16,6 +16,7 @@ contain only daylight readings by construction.
 """
 import datetime as dt
 import math
+import time
 
 import config
 import database
@@ -40,9 +41,22 @@ MIN_BUCKET_COVERAGE = 0.5
 # Default bin width for the long-term profile (minutes).
 PROFILE_BIN_MINUTES = 5
 
+# Bin width for the projection's typical-day curve (minutes). Coarser than
+# the default profile: the overlay only needs the day's overall shape.
+PROJECTION_BIN_MINUTES = 15
+
 # Sanity caps on request parameters.
 MAX_SESSION_DAYS = 30
 MAX_PROFILE_BIN_MINUTES = 30
+
+# In-process cache for get_solar_profile() results, keyed by bin size. The
+# aggregation scans every raw daylight reading, so repeated calls (All view,
+# today projection) would otherwise re-run the same SQLite scan per request.
+# The profile only changes as history grows -- new days land at sunrise and
+# old raw data is downsampled once a night -- so a short TTL is enough; there
+# is nothing to invalidate on wake-up.
+PROFILE_CACHE_TTL_SECONDS = 15 * 60
+_profile_cache: dict[int, tuple[float, dict]] = {}
 
 
 def to_utc_naive_iso(aware_iso: str) -> str:
@@ -194,9 +208,16 @@ def get_solar_profile(bin_minutes: int = PROFILE_BIN_MINUTES) -> dict:
 
     The aggregation itself happens inside SQLite (see
     database.aggregate_solar_profile); this function only supplies the
-    per-date sun windows.
+    per-date sun windows. Results are cached in-process per bin size for
+    PROFILE_CACHE_TTL_SECONDS -- the underlying history only grows on the
+    scale of days, so a slightly stale profile is always acceptable.
     """
     bin_seconds = max(60, min(int(bin_minutes), MAX_PROFILE_BIN_MINUTES) * 60)
+
+    now = time.monotonic()
+    cached = _profile_cache.get(bin_seconds)
+    if cached is not None and (now - cached[0]) < PROFILE_CACHE_TTL_SECONDS:
+        return cached[1]
 
     lo, hi = database.get_readings_time_span()
     bins = []
@@ -211,8 +232,146 @@ def get_solar_profile(bin_minutes: int = PROFILE_BIN_MINUTES) -> dict:
         day_count = len(windows)
         bins = database.aggregate_solar_profile(windows, bin_seconds)
 
-    return {
+    result = {
         "bin_seconds": bin_seconds,
         "day_count": day_count,
         "bins": bins,
+    }
+    _profile_cache[bin_seconds] = (now, result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Today's projected finish
+# ---------------------------------------------------------------------------
+def _typical_cumulative(pts: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """
+    Cumulative-energy breakpoints [(o, cum_Ws)] for the typical-day curve.
+
+    typical(o) is the piecewise-linear curve through the profile points
+    (o, avg AC W), clamped to 0 outside [first_o, last_o]. Integrating it
+    segment by segment (trapezoid) gives F(o) with F(first_o) = 0, so any
+    integral between two offsets is a lookup + interpolation on this table.
+    """
+    out = [(pts[0][0], 0.0)]
+    cum = 0.0
+    prev_o, prev_w = pts[0]
+    for o, w in pts[1:]:
+        cum += (prev_w + w) * 0.5 * (o - prev_o)
+        out.append((o, cum))
+        prev_o, prev_w = o, w
+    return out
+
+
+def _cum_at(cum_pts: list[tuple[float, float]], o: float) -> float:
+    """F(o) for o inside the curve; 0 before it, the full total after it."""
+    if o <= cum_pts[0][0]:
+        return 0.0
+    if o >= cum_pts[-1][0]:
+        return cum_pts[-1][1]
+    for (o0, c0), (o1, c1) in zip(cum_pts, cum_pts[1:]):
+        if o <= o1:
+            frac = (o - o0) / (o1 - o0) if o1 > o0 else 0.0
+            return c0 + frac * (c1 - c0)
+    return cum_pts[-1][1]
+
+
+def get_today_projection() -> dict:
+    """
+    Today's projected finish: how many kWh this day will likely end at, plus
+    the "typical day" curve behind the Today chart.
+
+    The typical day is get_solar_profile(bin_minutes=15) -- long-term average
+    power vs seconds-after-sunrise. AC output (`i_avg`) is used, not DC solar
+    input, because e_today counts AC energy; comparing like with like keeps
+    pace_ratio honest. Everything is expressed in kWh by integrating the
+    average-W curve over seconds-after-sunrise and dividing by 3600:
+
+        elapsed_expected   = F(now)          # what a typical day yields by now
+        remaining_expected = total - elapsed # what it would still add
+        projected_final    = live e_today + remaining_expected
+        pace_ratio         = live e_today / elapsed_expected
+
+    Degradation is left to the caller/UI: `day_count` < 3 means there is not
+    enough history to call any day "typical", so clients hide the overlay and
+    pace chip rather than presenting noise. Before sunrise / after sunset the
+    projection freezes at the honest endpoints (remaining = 0 once sunset has
+    passed, i.e. projected_final converges to the actual final yield).
+    """
+    info = get_today_window()
+    sunrise = dt.datetime.fromisoformat(info["sunrise"])
+    sunset = dt.datetime.fromisoformat(info["sunset"])
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    span = max(0.0, (sunset - sunrise).total_seconds())
+    now_offset = (now_utc - sunrise).total_seconds()
+
+    profile = get_solar_profile(PROJECTION_BIN_MINUTES)
+    # Only bins with an actual AC-average form the curve; gaps stay absent so
+    # neither the integral nor the chart invents power where none was seen.
+    pts = [
+        (b["o"], b["i_avg"])
+        for b in profile["bins"]
+        if b.get("i_avg") is not None
+    ]
+    curve = [{"o": o, "w": round(w, 1)} for o, w in pts]
+
+    # Honest history length for the UI degradation rule ("no typical day
+    # before 3 recorded days"). profile.day_count deliberately pads the span
+    # by one day per side to catch edge daylight, which would let a single
+    # day of history pass the >= 3 gate -- count actual data days instead.
+    lo, hi = database.get_readings_time_span()
+    if lo and hi:
+        tz = inverter.local_tz()
+        first = dt.datetime.fromisoformat(lo).astimezone(tz).date()
+        last = dt.datetime.fromisoformat(hi).astimezone(tz).date()
+        day_count = (last - first).days + 1
+    else:
+        day_count = 0
+
+    current_kwh = database.get_live_today_kwh()
+
+    typical_total_kwh = None
+    projected_final_kwh = None
+    pace_ratio = None
+
+    if pts:
+        cum = _typical_cumulative(pts)
+        # W·s -> kWh: J (= W·s) / 3600 = Wh, / 1000 = kWh.
+        WS_TO_KWH = 1.0 / 3_600_000.0
+        total_ws = _cum_at(cum, span)  # == F(last_o): area under the whole curve
+        typical_total_kwh = total_ws * WS_TO_KWH
+
+        if now_offset <= 0:
+            # Night, before today's window: nothing earned, everything expected.
+            elapsed_kwh = 0.0
+            remaining_kwh = typical_total_kwh
+        elif now_offset >= span:
+            # Sunset passed: freeze at the actual final vs the typical day.
+            elapsed_kwh = typical_total_kwh
+            remaining_kwh = 0.0
+        else:
+            elapsed_kwh = _cum_at(cum, now_offset) * WS_TO_KWH
+            remaining_kwh = typical_total_kwh - elapsed_kwh
+
+        if now_offset >= span:
+            projected_final_kwh = current_kwh
+        elif current_kwh is not None:
+            projected_final_kwh = current_kwh + remaining_kwh
+
+        if current_kwh is not None and elapsed_kwh > 0:
+            pace_ratio = current_kwh / elapsed_kwh
+
+    def _round(value, digits=2):
+        return round(value, digits) if value is not None else None
+
+    return {
+        "date": info["date"],
+        "day_count": day_count,
+        "bin_seconds": profile["bin_seconds"],
+        "now_offset_seconds": _round(now_offset, 1),
+        "current_kwh": _round(current_kwh),
+        "typical_total_kwh": _round(typical_total_kwh),
+        "projected_final_kwh": _round(projected_final_kwh),
+        "pace_ratio": _round(pace_ratio),
+        "curve": curve,
     }

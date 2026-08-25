@@ -445,6 +445,22 @@ async def api_insights_peak(
     return {"range": range, **(peak or {})}
 
 
+@app.get("/api/today/projection")
+async def api_today_projection():
+    """
+    Today's projected finish for the Power Over Time "Today" view: live
+    e_today + the expected remainder of the solar day according to the
+    long-term average-day profile (cached in-process; see solar.py).
+
+    Returns current/projected/typical kWh totals, pace_ratio against the
+    typical day, seconds-after-sunrise of "now", and the typical-day curve
+    [{o: seconds after sunrise, w: avg AC watts}] for the dashed chart
+    overlay. `day_count` lets the UI degrade honestly: fewer than 3 days of
+    history means no meaningful "typical day" yet.
+    """
+    return await asyncio.to_thread(solar.get_today_projection)
+
+
 @app.get("/api/daily-summary")
 async def api_daily_summary():
     rows = await asyncio.to_thread(database.get_daily_summary)

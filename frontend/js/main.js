@@ -11,7 +11,7 @@ import {
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
   renderGenerationSummary,
 } from './ui.js';
-import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange } from './charts.js';
+import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, loadTodayProjection, updatePaceTag } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
@@ -63,7 +63,8 @@ function stopDayPolling(){
 //   all      -> /api/history/solar-profile (long-term normalized profile)
 // Peak Production always comes separately from /api/insights/peak, which
 // reads MAX(raw DB reading) + its record timestamp -- fully independent of
-// the chart aggregation for the active range.
+// the chart aggregation for the active range. The today range also fetches
+// the projection (dashed typical-day overlay + pace tag, owned by charts.js).
 async function loadHistory(){
   try{
     loadPeakProduction();
@@ -79,7 +80,10 @@ async function loadHistory(){
       const {readings, sun} = await fetchHistory(state.range);
       renderHistory(readings, sun);
       computeInsights(readings);
+      if(state.range === 'today') loadTodayProjection();
     }
+    // Pace tag follows the active range (hidden everywhere but today).
+    updatePaceTag();
   }catch(e){
     console.error('Failed to load history', e);
   }
@@ -207,6 +211,9 @@ function handleWSMessage(msg){
     updateStatCards(msg.data);
     setLastUpdated(msg.data.timestamp);
     appendLivePoint(msg.data);
+    // Re-project the pace tag from the fetched typical-day curve (no
+    // refetch per tick).
+    updatePaceTag(msg.data.E_Today);
     setInverterStatus('online', {
       last_error: '',
       last_reading_at: msg.data.timestamp,
@@ -219,6 +226,7 @@ function handleWSMessage(msg){
     refreshSunInfo();
     setInverterStatus('night');
     stopDayPolling();
+    updatePaceTag(); // no pace statement at night
   }
   else if(msg.type === 'wake_up'){
     setMode(false);
@@ -228,6 +236,7 @@ function handleWSMessage(msg){
     // Next poll (seconds away) confirms online vs offline via reading/error.
     if(msg.status) setInverterStatus(msg.status, msg);
     // Fresh data after the long idle stretch, then resume the day cadence.
+    loadHistory();
     loadDailySummary();
     loadGenerationSummary();
     loadImpact();

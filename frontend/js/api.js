@@ -29,6 +29,13 @@ function fetchSolarProfile(){
   return getJSON('/api/history/solar-profile');
 }
 
+// Today's projected finish: live e_today + expected remainder of the solar
+// day per the long-term average-day profile, plus the typical-day curve for
+// the dashed Today-chart overlay (see charts.js).
+function fetchTodayProjection(){
+  return getJSON('/api/today/projection');
+}
+
 // Peak Production insight: server-side MAX over raw DB readings plus the
 // original timestamp of that record. Independent of chart aggregation.
 function fetchPeakProduction(range){
@@ -84,6 +91,7 @@ export {
   fetchHistory,
   fetchSolarSessions,
   fetchSolarProfile,
+  fetchTodayProjection,
   fetchPeakProduction,
   fetchDailySummary,
   fetchGenerationSummary,

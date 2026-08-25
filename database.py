@@ -770,6 +770,35 @@ def local_days_ago_start_utc(days_back: int) -> str:
     return start_local.astimezone(timezone.utc).isoformat()
 
 
+def get_live_today_kwh() -> Optional[float]:
+    """
+    Today's in-progress energy: MAX(e_today) seen since local midnight,
+    straight from the raw `readings` table -- the exact query pattern used
+    for "today" in get_generation_summary(), kept separate so the today
+    projection endpoint can read the live counter without recomputing every
+    KPI. Returns None before the first e_today reading of the day (no
+    fabricated zeros).
+    """
+    tz = _local_tz()
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    midnight_utc = now_local.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).astimezone(timezone.utc)
+
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT MAX(e_today) AS kwh FROM readings
+            WHERE timestamp >= ? AND e_today IS NOT NULL
+            """,
+            (midnight_utc.isoformat(),),
+        ).fetchone()
+        return row["kwh"] if row else None
+    finally:
+        conn.close()
+
+
 def get_peak_solar_input(since: Optional[str] = None) -> Optional[dict]:
     """
     Peak Production source of truth: MAX(solar_input) taken directly from the

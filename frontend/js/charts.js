@@ -6,7 +6,8 @@
 // history, selected by range:
 //
 //   1h    recent rolling window on a real-time axis (high resolution)
-//   today today's solar day: sunrise -> min(now, sunset), real-time axis
+//   today today's solar day: sunrise -> min(now, sunset), real-time axis,
+//         plus the dashed "typical day" projection overlay + pace tag
 //   7d    seven solar days concatenated left-to-right on a compressed
 //         axis of 15-minute buckets -- nighttime has zero width
 //   all   long-term average profile vs position within the solar day
@@ -19,6 +20,7 @@
 import { GAP_THRESHOLD_MS, MAX_POINTS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
+import { fetchTodayProjection } from './api.js';
 
 const el = id => document.getElementById(id);
 
@@ -262,7 +264,7 @@ function powerLegendEntries(chart){
     fillStyle: ds.borderColor,
     strokeStyle: ds.borderColor,
     lineWidth: ds.borderWidth,
-    lineDash: [],
+    lineDash: ds.borderDash || [],
     pointStyle: 'circle',
     fontColor,
     hidden: !chart.isDatasetVisible(i),
@@ -383,14 +385,153 @@ function renderToday(readings, sunInfo){
     lineDataset({ label: 'Solar Input (W)', data: solar, rgb: solarRgb, fill: true }),
     lineDataset({ label: 'Inverter Power (W)', data: power, rgb: inverterRgb }),
   ];
+  // Dashed long-term-average reference behind the actual day (index 2 so the
+  // live-append code can keep assuming datasets [0]/[1] are the metrics).
+  applyTodayOverlay();
   powerChart.options.scales.x = timeAxisConfig({
     unit: 'hour', stepSize: 1, tooltipFormat: 'HH:mm:ss', min: sunrise ?? undefined, max: end,
   });
   setInteraction('realtime');
-  setTooltipCallbacks({});
+  setTooltipCallbacks({
+    filter: item => !(item.dataset && item.dataset.isTypical),
+  });
   // Case D -- correct daylight axis, simply no readings yet today.
   setChartMsg(scoped.length ? null : 'No readings yet today');
   powerChart.update();
+}
+
+// ---------- Today's projected finish (typical-day overlay + pace tag) ----------
+// /api/today/projection returns the long-term average-day curve (avg AC
+// watts vs seconds-after-sunrise, server-integrated) plus live/typical kWh
+// totals. The dashed overlay is mapped onto the wall-clock axis as
+// sunrise + o; the pace tag re-projects client-side on every WS reading by
+// integrating that same fetched curve -- no refetch per tick.
+//
+// Degradation: fewer than 3 days of history means nothing is "typical" yet
+// -> no overlay, no tag; night and the first half hour after sunrise hide
+// only the tag (too little signal to pace against); after sunset the tag
+// freezes at the day's actual finish vs the typical total. A power cut
+// legitimately reads as a low pace -- the tag's tooltip says so.
+const TYPICAL_ALPHA = 0.45;          // existing series color at reduced alpha
+const PACE_WARMUP_SECONDS = 30 * 60; // hide the tag right after sunrise
+
+let todayProjection = null;   // last /api/today/projection payload
+let projReqId = 0;            // guards against stale responses on fast toggles
+
+function projectionUsable(){
+  return !!todayProjection
+    && todayProjection.day_count >= 3
+    && Array.isArray(todayProjection.curve)
+    && todayProjection.curve.length >= 2;
+}
+
+function typicalDataset(){
+  const sunriseMs = Date.parse(todayWindow.sunrise);
+  return {
+    label: 'Typical day',
+    isTypical: true,
+    data: todayProjection.curve.map(p => ({
+      x: new Date(sunriseMs + p.o * 1000), y: p.w,
+    })),
+    borderColor: rgba(solarRgb, TYPICAL_ALPHA),
+    borderWidth: 1.5,
+    borderDash: [6, 5],
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    fill: false,
+    tension: 0.25,
+  };
+}
+
+// Adds/removes the dashed dataset for the current view. Called from
+// renderToday (payload may already be in memory) and after each fetch.
+function applyTodayOverlay(){
+  const datasets = powerChart.data.datasets.filter(ds => !ds.isTypical);
+  if(powerMode === 'today' && todayWindow?.sunrise && projectionUsable()){
+    datasets.push(typicalDataset());
+  }
+  powerChart.data.datasets = datasets;
+}
+
+async function loadTodayProjection(){
+  const reqId = ++projReqId;
+  try{
+    const payload = await fetchTodayProjection();
+    if(reqId !== projReqId || state.range !== 'today') return;
+    todayProjection = (payload && !payload.error) ? payload : null;
+    applyTodayOverlay();
+    powerChart.update('none');
+    updatePaceTag();
+  }catch(e){
+    console.error('Failed to load today projection', e);
+  }
+}
+
+// Cumulative typical energy [W·s] from sunrise up to offset `limitSec`,
+// mirroring the server: piecewise-linear through the curve points, zero
+// outside them. One pass over ~50 points per call.
+function cumulativeTypicalWs(limitSec){
+  const c = todayProjection.curve;
+  let cum = 0, prevO = c[0].o, prevW = c[0].w;
+  if(limitSec <= prevO) return 0;
+  for(let i = 1; i < c.length; i++){
+    const o = c[i].o, w = c[i].w;
+    if(o >= limitSec){
+      const f = (limitSec - prevO) / (o - prevO);
+      const wl = prevW + f * (w - prevW);
+      return cum + (prevW + wl) * 0.5 * (limitSec - prevO);
+    }
+    cum += (prevW + w) * 0.5 * (o - prevO);
+    prevO = o; prevW = w;
+  }
+  return cum;
+}
+
+// W·s -> kWh (J/3600 = Wh, /1000 = kWh).
+const WS_TO_KWH = 1 / 3600000;
+
+// Pace tag in the panel head: "On pace for X kWh · typical Y". Recomputed
+// from the fetched curve on every live reading (`eTodayKwh`), falling back
+// to the payload's own current_kwh otherwise. Hides itself whenever the
+// view, time of day or history doesn't support an honest statement.
+function updatePaceTag(eTodayKwh){
+  const tag = el('paceTag');
+  const hide = () => { tag.hidden = true; };
+  if(state.range !== 'today' || state.nightMode || !projectionUsable()) return hide();
+  if(!todayWindow?.sunrise || !todayWindow?.sunset) return hide();
+
+  const sunriseMs = Date.parse(todayWindow.sunrise);
+  const sunsetMs = Date.parse(todayWindow.sunset);
+  if(!isFinite(sunriseMs) || !isFinite(sunsetMs)) return hide();
+
+  const kwh = (eTodayKwh ?? eTodayKwh === 0)
+    ? Number(eTodayKwh)
+    : todayProjection.current_kwh;
+  if(kwh === null || kwh === undefined || Number.isNaN(kwh)) return hide();
+
+  const offSec = (Date.now() - sunriseMs) / 1000;
+  const spanSec = (sunsetMs - sunriseMs) / 1000;
+  const typical = fmt(todayProjection.typical_total_kwh, 1);
+
+  if(offSec >= spanSec){
+    // Sunset passed: freeze at the actual final vs the typical day.
+    tag.hidden = false;
+    tag.textContent = `Finished at ${fmt(kwh, 1)} kWh · typical ${typical}`;
+    tag.title =
+      "How today actually finished against your long-term average day.";
+    return;
+  }
+  // Night and the first ~30 minutes: too little evidence to pace against.
+  if(offSec < PACE_WARMUP_SECONDS) return hide();
+
+  const remainingKwh =
+    (cumulativeTypicalWs(Infinity) - cumulativeTypicalWs(offSec)) * WS_TO_KWH;
+  tag.hidden = false;
+  tag.textContent = `On pace for ${fmt(kwh + remainingKwh, 1)} kWh · typical ${typical}`;
+  tag.title =
+    'Projected final yield if the rest of the day follows your long-term ' +
+    'average day. Compared to your long-term average day — a power cut ' +
+    'earlier today legitimately lowers it.';
 }
 
 // ---------- View: 7D (sequential compressed solar-day timeline) ----------
@@ -1006,6 +1147,10 @@ function applyChartTheme(themeName){
   dailyChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.8);
   cumulativeChart.data.datasets[0].borderColor = rgba(solarRgb, 0.9);
   cumulativeChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.08);
+  // The dashed projection line derives from the live solar rgb too.
+  for(const ds of powerChart.data.datasets){
+    if(ds.isTypical) ds.borderColor = rgba(solarRgb, TYPICAL_ALPHA);
+  }
   // Monthly's per-bar alphas derive from the live rgb values, so rebuild.
   if(latestMonthly) rebuildMonthly();
 
@@ -1018,4 +1163,8 @@ function applyChartTheme(themeName){
   }
 }
 
-export { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, applyChartTheme };
+export {
+  renderHistory, renderSessions, renderProfile, appendLivePoint,
+  renderDailySummary, renderCumulative, setCumulativeRange,
+  renderMonthly, setMonthlyRange, applyChartTheme,
+  loadTodayProjection, updatePaceTag };

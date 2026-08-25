@@ -78,7 +78,7 @@ solar-dashboard/
     │   ├── state.js          # Tiny shared state (selected range, night mode)
     │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
-    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, daily bar + cumulative energy + monthly energy (with YoY) charts
+    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, today's typical-day overlay + pace tag, daily bar + cumulative energy + monthly energy (with YoY) charts
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
 │   ├── ui.js             # Status pills, night banner, stat cards
@@ -190,6 +190,18 @@ directory (path controlled by `DB_PATH`). The schema is created via
   astral calculation, sessions are bucketed relative to each day's sunrise,
   and the long-term profile is aggregated inside SQLite. Raw readings are
   never modified; this is purely a read-side view.
+- **Today's projected finish**: with the Today range active, the Power Over
+  Time chart draws a dashed "typical day" line behind the actual curves —
+  the long-term average AC output at each position within the solar day
+  (`/api/today/projection`, 15-minute bins, server-integrated; the profile
+  aggregation is cached in-process for 15 minutes). A small tag in the panel
+  head reads `On pace for X kWh · typical Y`, recomputed on every live
+  reading by integrating the fetched curve client-side (no refetch per tick).
+  It degrades honestly: fewer than 3 recorded days → no overlay and no tag;
+  night and the first half hour after sunrise hide the tag only; after
+  sunset it freezes at the day's actual finish vs the typical total. A power
+  cut legitimately shows as a low pace — the tag's tooltip says the
+  comparison is against your long-term average day.
 - **Average Daily Yield card**: in the sidebar (between Inverter Status and
   Insights), one panel stacking Average / Best Day / Worst Day. Two date
   inputs in the panel head select the range; both are constrained via
@@ -245,7 +257,8 @@ directory (path controlled by `DB_PATH`). The schema is created via
 |---|---|
 | `GET /api/history?range=1h\|today\|24h\|7d\|all` | Raw readings in the given range. `today` returns the current solar day (sunrise → now) plus its `sun` window so charts can be bounded correctly; `24h` remains a rolling window for compatibility |
 | `GET /api/history/solar-sessions?days=N&bin=60\|300\|900` | Daylight buckets for the last N local dates, each normalized to seconds-after-sunrise (`bin` = aggregation width; 900 = 15-minute buckets for the 7D sequential timeline). Buckets failing the minimum-coverage rule are omitted — a power cut shows as a gap, never as zero |
-| `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals) |
+| `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals). Cached in-process per bin size for 15 minutes — the underlying history only grows on the scale of days |
+| `GET /api/today/projection` | Today's projected finish: live `E_Today` plus the expected remainder of the solar day according to the long-term average-day profile. Returns `current_kwh`, `projected_final_kwh`, `typical_total_kwh`, `pace_ratio` (live ÷ expected-so-far), `now_offset_seconds`, `day_count` (real history days; the UI hides the feature below 3) and the typical-day curve `[{o: seconds after sunrise, w: avg AC watts}]` for the dashed chart overlay. After sunset the projection freezes at the actual final vs the typical total; before the first reading of the day the live fields are `null` rather than 0. Backs the Today view's typical-day overlay and pace tag |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
 | `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries an `impact{}` block for the Savings & Impact panel (`tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂ kg/t, computed live at the current rates; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the dashboard's Generation KPI strip |
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
@@ -268,7 +281,8 @@ directory (path controlled by `DB_PATH`). The schema is created via
   line rather than interpolating across it.
 - **Power Over Time views**: `1H` is a rolling real-time window, `Today` shows
   only the current solar day (sunrise → min(now, sunset), from the backend's
-  astral calculation — never yesterday's data or future time), `7D` renders
+  astral calculation — never yesterday's data or future time) with the dashed
+  typical-day projection overlay and pace tag, `7D` renders
   the seven days as one sequential timeline of 15-minute averaged buckets
   (nighttime occupies zero horizontal width; missing buckets break the line),
   and `All` shows a long-term average power profile over position within the
