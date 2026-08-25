@@ -299,22 +299,24 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 }
 
 /* ==========================================================================
-    Sun path card — SVG instrument dial + countdown (sidebar widget)
+    Sun path card — SVG instrument dial + countdown
    ========================================================================== */
 
 .sun-arc-card{
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-4) var(--space-3) var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: 0;
 }
 
 .sun-arc-plot{
-  width: min(100%, 264px);
+  width: min(100%, 300px);
   color: var(--accent);
 }
 
@@ -342,18 +344,18 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 /* Label row: sunrise | countdown | sunset, aligned under the dial. */
 .sun-arc-data{
-  width: min(100%, 280px);
+  width: min(100%, 300px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .arc-endpoint{
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -373,7 +375,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 .rail-value{
   font-family: var(--mono);
-  font-size: var(--font-size-1);
+  font-size: var(--font-size-2);
   color: var(--dim);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -437,14 +439,14 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 .stats{
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .stat-card{
@@ -1475,6 +1477,20 @@ footer{
   position: relative;
 }
 
+/* Live hero: sun dial beside the stat tiles. The dial reads first in the
+   DOM, so phones stack it on top naturally. */
+.live-hero{
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1020px){
+  .live-hero{ grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Only the active view participates in layout and animation; inactive DOM
    is display:none so hidden charts do zero work. */
 .view{ display: none; }
@@ -1551,7 +1567,6 @@ footer{
 
 @media (max-width: 1020px){
   .layout{ grid-template-columns: 1fr; }
-  .stats{ grid-template-columns: repeat(3, 1fr); }
 
   /* Phone shell: topbar segmented nav makes way for the fixed bottom
      tab bar; page reserves room so content never hides behind it. */
@@ -1611,8 +1626,12 @@ footer{
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
+  /* --- Sun path card: slightly smaller dial, labels keep the rhythm --- */
+  .sun-arc-plot,
+  .sun-arc-data{ width: min(100%, 260px); }
+
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
-          longest realistic readings on one line at 320px --- */
+         longest realistic readings on one line at 320px --- */
   .stats{ grid-template-columns: repeat(2, 1fr); }
   .stat-card{ padding: 12px 14px; }
   .stat-value{ font-size: 20px; }
