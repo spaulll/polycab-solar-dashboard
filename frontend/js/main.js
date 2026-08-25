@@ -4,6 +4,7 @@
 
 import { DAILY_SUMMARY_REFRESH_MS, POWERCUTS_REFRESH_MS, SUN_INFO_REFRESH_MS, MONTHLY_ALL_MONTHS } from './config.js';
 import { state, setRange } from './state.js';
+import { loadPref, savePref } from './prefs.js';
 import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProduction, fetchDailySummary, fetchGenerationSummary, fetchGenerationMonthly, fetchStatus, fetchPowercutCount, csvExportURL } from './api.js';
 import { connectWebSocket } from './ws.js';
 import {
@@ -30,11 +31,6 @@ async function loadPowercutCount(){
     console.error('Failed to load powercut count', e);
   }
 }
-
-document.getElementById('pcRange').addEventListener('change', (e) => {
-  pcRange = e.target.value;
-  loadPowercutCount();
-});
 
 // ---------- Day-mode polling manager ----------
 // Daily summary and powercuts only change while the inverter is awake, so
@@ -258,30 +254,80 @@ function handleWSMessage(msg){
   }
 }
 
+// ---------- Persisted range selections ----------
+// Every tab/range group remembers its last user-selected value across page
+// reloads via localStorage (prefs.js). Restored BEFORE any data loads so the
+// charts' first render already uses the saved view; the active-button sync
+// lives here too, replacing the static classes in index.html. Values are
+// validated against the options actually present in the markup, so stale or
+// corrupted entries fall back to the group's default.
+const POWERCUTS_DEFAULT_RANGE = 'today';
+
+function toggleOptions(toggleId){
+  return [...document.querySelectorAll(`#${toggleId} button[data-range]`)]
+    .map(b => b.dataset.range);
+}
+
+function setToggleActive(toggleId, value){
+  document.querySelectorAll(`#${toggleId} button[data-range]`)
+    .forEach(b => b.classList.toggle('active', b.dataset.range === value));
+}
+
+// The cumulative/monthly/powercuts groups keep their state inside their own
+// modules/sections with defaults 'all' / '12' / today; restoring through
+// their normal setters keeps one mutation path for both boot and clicks.
+function restorePersistedRanges(){
+  const power = loadPref('powerRange', toggleOptions('rangeToggle'), state.range);
+  setRange(power);
+  setToggleActive('rangeToggle', power);
+
+  const cumulative = loadPref('cumulativeRange', toggleOptions('cumRangeToggle'), 'all');
+  setCumulativeRange(cumulative);
+  setToggleActive('cumRangeToggle', cumulative);
+
+  const monthly = loadPref('monthlyRange', toggleOptions('monthlyRangeToggle'), '12');
+  setMonthlyRange(monthly);
+  setToggleActive('monthlyRangeToggle', monthly);
+
+  const pcSelect = document.getElementById('pcRange');
+  pcRange = loadPref(
+    'powercutsRange',
+    [...pcSelect.options].map(o => o.value),
+    POWERCUTS_DEFAULT_RANGE,
+  );
+  pcSelect.value = pcRange;
+}
+
 // ---------- UI events ----------
 document.getElementById('rangeToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-range]');
   if(!btn) return;
-  document.querySelectorAll('#rangeToggle button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  setToggleActive('rangeToggle', btn.dataset.range);
   setRange(btn.dataset.range);
+  savePref('powerRange', btn.dataset.range);
   loadHistory();
 });
 
 document.getElementById('cumRangeToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-range]');
   if(!btn) return;
-  document.querySelectorAll('#cumRangeToggle button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  setToggleActive('cumRangeToggle', btn.dataset.range);
   setCumulativeRange(btn.dataset.range);
+  savePref('cumulativeRange', btn.dataset.range);
 });
 
 document.getElementById('monthlyRangeToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-range]');
   if(!btn) return;
-  document.querySelectorAll('#monthlyRangeToggle button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  setToggleActive('monthlyRangeToggle', btn.dataset.range);
   setMonthlyRange(btn.dataset.range);
+  savePref('monthlyRange', btn.dataset.range);
+});
+
+document.getElementById('pcRange').addEventListener('change', (e) => {
+  pcRange = e.target.value;
+  savePref('powercutsRange', pcRange);
+  loadPowercutCount();
 });
 
 document.getElementById('csvBtn').addEventListener('click', () => {
@@ -292,6 +338,10 @@ document.getElementById('csvBtn').addEventListener('click', () => {
 (async function init(){
   // Theme first: charts read the active palette at creation and on change.
   initTheme(applyChartTheme);
+  // Saved tab selections next, strictly before any data fetch: the initial
+  // loadHistory()/loadDailySummary()/... below must render the restored
+  // views, never the hardcoded defaults.
+  restorePersistedRanges();
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();

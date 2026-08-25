@@ -76,6 +76,7 @@ solar-dashboard/
     │   ├── main.js           # Entry point: boot sequence, event wiring, WS message routing
     │   ├── config.js         # Endpoints and tuning constants (gap threshold, trim sizes, refresh rates)
     │   ├── state.js          # Tiny shared state (selected range, night mode)
+    │   ├── prefs.js          # localStorage-backed UI preferences (remembered tab/range selections)
     │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
     │   ├── ws.js             # WebSocket client with auto-reconnect
     │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, today's typical-day overlay + pace tag, daily bar + cumulative energy + monthly energy (with YoY) charts
@@ -309,3 +310,13 @@ directory (path controlled by `DB_PATH`). The schema is created via
   `partial data · d/d days` in the tooltip.
 - To reset all history, stop the server and delete the SQLite file (`solar_data.db`
   by default).
+- **Remembered range selections**: each tab group — Power Over Time
+  (1H/Today/7D/All), Cumulative Energy (30D/90D/All), Monthly Energy
+  (12M/24M/All) and the Powercuts window — remembers its last user-selected
+  value across page reloads via `localStorage`
+  (`polycab.dashboard.powerRange`, `polycab.dashboard.cumulativeRange`,
+  `polycab.dashboard.monthlyRange`, `polycab.dashboard.powercutsRange`).
+  Saved values are validated against the options present in the UI on every
+  load, so stale or corrupted entries silently fall back to the defaults,
+  and each group is stored independently. Storage failures (private mode
+  etc.) are ignored — the dashboard just uses defaults.
