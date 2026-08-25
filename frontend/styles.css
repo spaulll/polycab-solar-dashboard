@@ -308,17 +308,17 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 16px;
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-4);
   margin-bottom: 0;
 }
 
 .sun-arc-plot{
-  width: min(100%, 216px);
+  width: min(100%, 250px);
   color: var(--accent);
 }
 
@@ -344,14 +344,34 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   .sun-halo{ animation: none; }
 }
 
-/* Label row: sunrise | countdown | sunset, aligned under the dial. */
-.sun-arc-data{
-  width: min(100%, 240px);
+/* Countdown: the card's hero figure, directly under the dial. */
+.sun-arc-countdown{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  text-align: center;
+  min-width: 0;
+}
+
+.sun-countdown-value{
+  font-family: var(--mono);
+  font-size: var(--font-size-6);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Bottom row: sunrise | sunset with a hairline between. */
+.sun-arc-times{
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: 0;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
 }
 
 .arc-endpoint{
@@ -361,9 +381,15 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   min-width: 0;
 }
 
+.arc-sep{
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+}
+
 .rail-icon{
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   color: var(--faint);
   flex: none;
 }
@@ -377,34 +403,13 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 .rail-value{
   font-family: var(--mono);
-  font-size: var(--font-size-2);
-  color: var(--dim);
+  font-size: var(--font-size-3);
+  color: var(--text);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .rail-value.accent{ color: var(--accent); }
-
-.sun-countdown{
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  text-align: center;
-  min-width: 0;
-}
-
-.sun-countdown .rail-value{
-  font-size: var(--font-size-4);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.rail-sep{
-  width: 1px;
-  height: 18px;
-  background: var(--line);
-}
 
 /* ==========================================================================
    Night banner
@@ -1637,9 +1642,8 @@ footer{
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
-  /* --- Sun path card: slightly smaller dial, labels keep the rhythm --- */
-  .sun-arc-plot{ width: min(100%, 240px); }
-  .sun-arc-data{ width: min(100%, 260px); }
+  /* --- Sun path card: dial scales with the narrow viewport --- */
+  .sun-arc-plot{ width: min(100%, 250px); }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
          longest realistic readings on one line at 320px --- */

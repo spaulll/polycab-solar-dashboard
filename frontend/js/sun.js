@@ -17,11 +17,10 @@ const el = id => document.getElementById(id);
 const plot = el('sunArcPlot');
 const card = el('sunArcCard');
 
-// Geometry (viewBox units). The canvas reserves a slim band below the
-// horizon for the moon path / ground glow so day and night share one
-// composition without inflating the card's height.
-const W = 240, H = 156;
-const CX = 120, CY = 112, R = 92, RM = 36;
+// Geometry (viewBox units). Slim reserve below the horizon hosts the night
+// moon path; the day composition ends at the endpoint dots.
+const W = 240, H = 148;
+const CX = 120, CY = 124, R = 102, RM = 22;
 
 let sunTargetSunrise = null; // Date — next sunrise
 let sunTargetSunset = null;  // Date — next sunset
@@ -44,7 +43,8 @@ function buildArc(){
   plot.replaceChildren();
   const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true' });
 
-  // Gradients: elapsed stroke, area wash, ground glow, marker halo.
+  // Gradients: elapsed stroke (light at sunrise -> full at the marker),
+  // marker halo, whisper-faint interior tint.
   const defs = svgEl('defs');
   const grad = (id, stops, attrs = {}) => {
     const g = svgEl('linearGradient', { id, ...attrs });
@@ -52,51 +52,43 @@ function buildArc(){
       g.appendChild(svgEl('stop', { offset: off, 'stop-color': color, 'stop-opacity': op }));
     defs.appendChild(g);
   };
-  grad('sa-stroke', [[0, 'currentColor', 0.35], [1, 'currentColor', 1]]);
-  grad('sa-wash', [[0, 'currentColor', 0.14], [1, 'currentColor', 0]],
+  grad('sa-stroke', [[0, 'currentColor', 0.45], [1, 'currentColor', 1]]);
+  grad('sa-wash', [[0, 'currentColor', 0.06], [1, 'currentColor', 0]],
     { x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad('sa-ground', [[0, 'currentColor', 0.10], [1, 'currentColor', 0]],
-    { x1: 0, y1: 0, x2: 0, y2: 1 });
-  // Halo is radial: bright core fading to nothing.
   const haloGrad = svgEl('radialGradient', { id: 'sa-halo' });
   for(const [off, op] of [[0, 0.5], [0.45, 0.18], [1, 0]])
     haloGrad.appendChild(svgEl('stop', { offset: off, 'stop-color': 'currentColor', 'stop-opacity': op }));
   defs.appendChild(haloGrad);
   svg.appendChild(defs);
 
-  // Area wash under the elapsed portion (day only).
+  const [tx1, ty1] = polar(R, Math.PI);
+  const [tx2, ty2] = polar(R, 0);
+
+  // Interior tint (static, day only).
   const wash = svgEl('path', {
-    d: '', fill: 'url(#sa-wash)', stroke: 'none', opacity: 0,
+    d: `M ${tx1} ${ty1} A ${R} ${R} 0 0 1 ${tx2} ${ty2} Z`,
+    fill: 'url(#sa-wash)', stroke: 'none', opacity: 0,
     class: 'sun-arc-wash',
   });
 
-  // Ground glow hugging the horizon (day only).
-  const ground = svgEl('rect', {
-    x: CX - R, y: CY, width: R * 2, height: 20,
-    fill: 'url(#sa-ground)', opacity: 0,
-    class: 'sun-arc-ground',
-  });
-
-  // Faint full track + hour ticks (every 15 degrees, endpoints excluded).
-  const [tx1, ty1] = polar(R, Math.PI);
-  const [tx2, ty2] = polar(R, 0);
+  // Thin remainder track + interior hour ticks.
   const track = svgEl('path', {
     d: `M ${tx1} ${ty1} A ${R} ${R} 0 0 1 ${tx2} ${ty2}`,
     fill: 'none', stroke: 'currentColor', 'stroke-width': 2,
-    opacity: 0.16, 'stroke-linecap': 'round',
+    opacity: 0.3, 'stroke-linecap': 'round',
   });
-  const ticks = svgEl('g', { stroke: 'currentColor', 'stroke-width': 1, opacity: 0.28 });
-  for(let i = 1; i < 12; i++){
-    const a = Math.PI * (1 - i / 12);
-    const [x1, y1] = polar(R - 3, a);
-    const [x2, y2] = polar(R - 8, a);
+  const ticks = svgEl('g', { stroke: 'currentColor', 'stroke-width': 1, opacity: 0.35 });
+  for(let i = 1; i < 14; i++){
+    const a = Math.PI * (1 - i / 14);
+    const [x1, y1] = polar(R - 9, a);
+    const [x2, y2] = polar(R - 17, a);
     ticks.appendChild(svgEl('line', { x1, y1, x2, y2 }));
   }
 
-  // Gradient elapsed stroke.
+  // Thick gradient elapsed stroke.
   const elapsed = svgEl('path', {
     d: '', fill: 'none', stroke: 'url(#sa-stroke)',
-    'stroke-width': 3.5, 'stroke-linecap': 'round', opacity: 0,
+    'stroke-width': 7, 'stroke-linecap': 'round', opacity: 0,
   });
 
   // Dashed moon path below the horizon (night only).
@@ -107,30 +99,22 @@ function buildArc(){
     class: 'sun-arc-moon',
   });
 
-  // Horizon: hairline fading at both ends + endpoint dots.
-  const hGrad = svgEl('linearGradient', { id: 'sa-horizon', x1: 0, y1: 0, x2: 1, y2: 0 });
-  for(const [off, op] of [[0, 0], [0.12, 0.5], [0.88, 0.5], [1, 0]])
-    hGrad.appendChild(svgEl('stop', { offset: off, 'stop-color': 'currentColor', 'stop-opacity': op }));
-  defs.appendChild(hGrad);
-  const horizon = svgEl('line', {
-    x1: CX - R - 10, y1: CY, x2: CX + R + 10, y2: CY,
-    stroke: 'url(#sa-horizon)', 'stroke-width': 1,
-  });
-  const endDots = svgEl('g', { fill: 'currentColor', opacity: 0.55 });
+  // Solid endpoint dots anchoring the arc ends.
+  const endDots = svgEl('g', { fill: 'currentColor' });
   for(const a of [Math.PI, 0]){
     const [x, y] = polar(R, a);
-    endDots.appendChild(svgEl('circle', { cx: x, cy: y, r: 2.2 }));
+    endDots.appendChild(svgEl('circle', { cx: x, cy: y, r: 4 }));
   }
 
-  // "Now" marker: soft halo + solid disc (glow pulses via CSS).
-  const halo = svgEl('circle', { r: 14, fill: 'url(#sa-halo)', class: 'sun-halo' });
-  const disc = svgEl('circle', { r: 5.5, fill: 'currentColor' });
+  // "Now" marker: soft glow halo + solid disc (halo pulses via CSS).
+  const halo = svgEl('circle', { r: 17, fill: 'url(#sa-halo)', class: 'sun-halo' });
+  const disc = svgEl('circle', { r: 8.5, fill: 'currentColor' });
   const marker = svgEl('g', { class: 'sun-marker' }, [halo, disc]);
 
-  svg.append(wash, ground, track, ticks, moon, elapsed, horizon, endDots, marker);
+  svg.append(wash, track, ticks, moon, elapsed, endDots, marker);
   plot.appendChild(svg);
 
-  els = { wash, ground, elapsed, moon, marker };
+  els = { wash, elapsed, moon, marker };
 }
 
 // Render everything from a marker angle in [0, PI]. Day: the angle is the
@@ -144,26 +128,22 @@ function draw(a){
 
   if(night){
     els.wash.setAttribute('opacity', 0);
-    els.ground.setAttribute('opacity', 0);
     els.elapsed.setAttribute('opacity', 0);
     const [x, y] = [CX + RM * Math.cos(a), CY + RM * Math.sin(a)];
     els.marker.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
     return;
   }
 
-  els.ground.setAttribute('opacity', 1);
+  els.wash.setAttribute('opacity', 1);
   const frac = 1 - a / Math.PI;
   const [mx, my] = polar(R, a);
   if(frac > 0.004){
-    const d = `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${mx.toFixed(2)} ${my.toFixed(2)}`;
-    els.elapsed.setAttribute('d', d);
+    els.elapsed.setAttribute('d',
+      `M ${(CX - R).toFixed(2)} ${CY} A ${R} ${R} 0 0 1 ${mx.toFixed(2)} ${my.toFixed(2)}`);
     els.elapsed.setAttribute('opacity', 1);
-    els.wash.setAttribute('d', `${d} L ${mx.toFixed(2)} ${CY} Z`);
-    els.wash.setAttribute('opacity', 1);
   }else{
     els.elapsed.setAttribute('d', '');
     els.elapsed.setAttribute('opacity', 0);
-    els.wash.setAttribute('opacity', 0);
   }
   els.marker.setAttribute('transform', `translate(${mx.toFixed(2)} ${my.toFixed(2)})`);
 }
