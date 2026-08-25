@@ -85,6 +85,23 @@
         <path d="M3.5 18v2A1.5 1.5 0 0 0 5 21.5h14a1.5 1.5 0 0 0 1.5-1.5v-2"/>
       </g>
     </symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24">
+      <path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"
+            fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 20h18"/>
+        <path d="m4 15 5-6 4 3.5L20 5"/>
+        <path d="M15.5 5H20v4.5"/>
+      </g>
+    </symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="m15.5 8.5-2 5-5 2 2-5z"/>
+      </g>
+    </symbol>
 
     <symbol id="wi-sun" viewBox="0 0 24 24">
       <g fill="currentColor" stroke="currentColor" stroke-width="1.4">
@@ -149,6 +166,19 @@
       </div>
     </div>
 
+    <!-- Desktop view switcher (becomes the bottom tab bar on phones) -->
+    <nav class="view-nav" aria-label="Dashboard views">
+      <button data-nav="live" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bolt"/></svg>Live
+      </button>
+      <button data-nav="trends" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trend"/></svg>Trends
+      </button>
+      <button data-nav="insights" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-compass"/></svg>Insights
+      </button>
+    </nav>
+
     <div class="topbar-right">
       <span class="updated" id="lastUpdated">no data yet</span>
       <span class="pill" title="Data link">
@@ -171,6 +201,12 @@
       </div>
     </div>
   </header>
+
+  <!-- ================= Views ================= -->
+  <main class="views" id="views">
+
+  <!-- ============ Live view: now-moments + today's chart + status ============ -->
+  <section class="view active" data-view="live">
 
   <!-- ================= Sun rail ================= -->
   <div class="sun-rail">
@@ -226,6 +262,73 @@
     </article>
   </section>
 
+  <!-- Live workspace: today's chart left, status right -->
+  <div class="layout">
+
+    <section class="col-main">
+
+      <!-- Power over time -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Power Over Time <span class="tag" id="paceTag" hidden></span></h3>
+          <div class="range-toggle" id="rangeToggle">
+            <button data-range="1h">1H</button>
+            <button data-range="today">Today</button>
+            <button data-range="7d">7D</button>
+            <button data-range="all">All</button>
+          </div>
+        </div>
+        <div class="chart-holder">
+          <canvas id="powerChart"></canvas>
+          <div class="chart-msg" id="chartMsg"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <aside class="col-side">
+
+      <!-- Inverter status -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Inverter Status</h3>
+        </div>
+        <div class="panel-body">
+          <div class="inv-status-value" id="invStatus">—</div>
+          <div class="inv-offline-timer" id="invOfflineTimer"></div>
+          <dl class="meta-list">
+            <div class="meta-row">
+              <dt>Last reading</dt>
+              <dd id="invLastReading">–</dd>
+            </div>
+            <div class="meta-row">
+              <dt>Last error</dt>
+              <dd id="invLastError">–</dd>
+            </div>
+          </dl>
+          <div class="pc-block">
+            <div class="pc-head">
+              <span class="pc-label">Powercuts</span>
+              <select id="pcRange">
+                <option value="today">Today</option>
+                <option value="7d">7 days</option>
+                <option value="30d">30 days</option>
+                <option value="lifetime">Lifetime</option>
+              </select>
+            </div>
+            <div class="pc-count" id="pcCount">–</div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  </section>
+
+  <!-- ============ Trends view: historical energy + weather ============ -->
+  <section class="view" data-view="trends">
+
   <!-- ================= Generation KPI strip ================= -->
   <section class="gen-strip" aria-label="Generation summary">
     <article class="gen-card">
@@ -258,27 +361,8 @@
     </article>
   </section>
 
-  <!-- ================= Workspace ================= -->
-  <main class="layout">
-
+  <div class="layout single">
     <section class="col-main">
-
-      <!-- Power over time -->
-      <div class="panel">
-        <div class="panel-head">
-          <h3 class="panel-title">Power Over Time <span class="tag" id="paceTag" hidden></span></h3>
-          <div class="range-toggle" id="rangeToggle">
-            <button data-range="1h">1H</button>
-            <button data-range="today">Today</button>
-            <button data-range="7d">7D</button>
-            <button data-range="all">All</button>
-          </div>
-        </div>
-        <div class="chart-holder">
-          <canvas id="powerChart"></canvas>
-          <div class="chart-msg" id="chartMsg"></div>
-        </div>
-      </div>
 
       <!-- Daily energy log -->
       <div class="panel">
@@ -342,41 +426,16 @@
       </div>
 
     </section>
+  </div>
 
-    <aside class="col-side">
+  </section>
 
-      <!-- Inverter status -->
-      <div class="panel">
-        <div class="panel-head">
-          <h3 class="panel-title">Inverter Status</h3>
-        </div>
-        <div class="panel-body">
-          <div class="inv-status-value" id="invStatus">—</div>
-          <div class="inv-offline-timer" id="invOfflineTimer"></div>
-          <dl class="meta-list">
-            <div class="meta-row">
-              <dt>Last reading</dt>
-              <dd id="invLastReading">–</dd>
-            </div>
-            <div class="meta-row">
-              <dt>Last error</dt>
-              <dd id="invLastError">–</dd>
-            </div>
-          </dl>
-          <div class="pc-block">
-            <div class="pc-head">
-              <span class="pc-label">Powercuts</span>
-              <select id="pcRange">
-                <option value="today">Today</option>
-                <option value="7d">7 days</option>
-                <option value="30d">30 days</option>
-                <option value="lifetime">Lifetime</option>
-              </select>
-            </div>
-            <div class="pc-count" id="pcCount">–</div>
-          </div>
-        </div>
-      </div>
+  <!-- ============ Insights view: yield, efficiency, savings ============ -->
+  <section class="view" data-view="insights">
+
+  <div class="layout">
+
+    <section class="col-main">
 
       <!-- Average daily yield -->
       <div class="panel">
@@ -431,6 +490,10 @@
           </div>
         </div>
       </div>
+
+    </section>
+
+    <aside class="col-side">
 
       <!-- Savings & impact -->
       <div class="panel" id="impactPanel" hidden>
@@ -494,11 +557,27 @@
       </div>
 
     </aside>
+  </div>
+
+  </section>
 
   </main>
 
   <footer>Solar Dashboard · Made with ❤️ & AI</footer>
 </div>
+
+<!-- ================= Bottom tab bar (phones) ================= -->
+<nav class="tabbar" aria-label="Dashboard views">
+  <button data-nav="live" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-bolt"/></svg><span>Live</span>
+  </button>
+  <button data-nav="trends" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-trend"/></svg><span>Trends</span>
+  </button>
+  <button data-nav="insights" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-compass"/></svg><span>Insights</span>
+  </button>
+</nav>
 
 <!-- ================= Weather popup ================= -->
 <div class="weather-overlay" id="weatherOverlay" hidden>

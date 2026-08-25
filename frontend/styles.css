@@ -1150,12 +1150,134 @@ footer{
 }
 
 /* ==========================================================================
+   Views & navigation — three-zone IA recomposed per breakpoint
+   ========================================================================== */
+
+.views{
+  position: relative;
+}
+
+/* Only the active view participates in layout and animation; inactive DOM
+   is display:none so hidden charts do zero work. */
+.view{ display: none; }
+.view.active{
+  display: block;
+  animation: view-in var(--dur-med) var(--ease-out);
+}
+
+@keyframes view-in{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .view.active{ animation-name: view-in-fade; }
+  @keyframes view-in-fade{
+    from{ opacity: 0; }
+    to{ opacity: 1; }
+  }
+}
+
+/* --- Desktop segmented control in the topbar --- */
+.view-nav{
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+}
+
+.view-nav button{
+  appearance: none;
+  border: none;
+  background: transparent;
+  border-right: 1px solid var(--line-strong);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: var(--font-size-1);
+  letter-spacing: 0.06em;
+  padding: 6px 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: background var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.view-nav button:last-child{ border-right: none; }
+
+.view-nav button svg{ width: 13px; height: 13px; }
+
+.view-nav button:hover{
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.view-nav button.active{
+  color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: inset 0 -2px 0 var(--accent-line);
+}
+
+/* Trends keeps its chart stack full width (no side column). */
+.layout.single{ grid-template-columns: minmax(0, 1fr); }
+.layout.single .col-main{ grid-template-columns: minmax(0, 1fr); }
+
+/* --- Phone bottom tab bar --- */
+.tabbar{
+  display: none;
+}
+
+/* ==========================================================================
    Responsive — desktop first, still usable on phone
    ========================================================================== */
 
 @media (max-width: 1020px){
   .layout{ grid-template-columns: 1fr; }
   .stats{ grid-template-columns: repeat(3, 1fr); }
+
+  /* Phone shell: topbar segmented nav makes way for the fixed bottom
+     tab bar; page reserves room so content never hides behind it. */
+  .view-nav{ display: none; }
+
+  .tabbar{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tabbar button{
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--faint);
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    min-height: 44px;
+    padding: 7px 4px 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: color var(--dur-fast);
+  }
+
+  .tabbar button svg{ width: 20px; height: 20px; }
+
+  .tabbar button.active{
+    color: var(--accent);
+    box-shadow: inset 0 2px 0 var(--accent-line);
+  }
 
   /* Keep the desktop 5-up KPI row instead of 3-up: 5 cards can never fill
      3 columns, and the leftover cell showed as a bare gap in the strip. */
@@ -1165,7 +1287,7 @@ footer{
 }
 
 @media (max-width: 620px){
-  .wrap{ padding: 14px 12px 32px; }
+  .wrap{ padding: 14px 12px calc(32px + env(safe-area-inset-bottom, 0px) + 58px); }
 
   /* --- Topbar: status cluster left, actions cluster right --- */
   .topbar-right{ width: 100%; gap: 8px; }

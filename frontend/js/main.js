@@ -22,6 +22,30 @@ import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
 import { initTheme } from './theme.js';
 import { applyChartTheme } from './charts.js';
+import { VIEWS, initRouter, navigate } from './router.js';
+
+// ---------- View switching ----------
+// The router owns which view is current; this layer applies it to the DOM.
+// Inactive views go display:none (no offscreen chart work). When the
+// View Transitions API is available and motion is allowed, the swap runs
+// as a transition; otherwise it's an instant class toggle backed by the
+// CSS slide-fade on .view.active.
+
+function setViewActive(view){
+  document.querySelectorAll('.view').forEach(s =>
+    s.classList.toggle('active', s.dataset.view === view));
+  document.querySelectorAll('[data-nav]').forEach(b =>
+    b.classList.toggle('active', b.dataset.nav === view));
+}
+
+function applyView(view, prev){
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(prev === null || reduceMotion || !document.startViewTransition){
+    setViewActive(view);
+    return;
+  }
+  document.startViewTransition(() => setViewActive(view));
+}
 
 // ---------- Powercuts counter ----------
 let pcRange = 'today';
@@ -344,7 +368,12 @@ document.getElementById('csvBtn').addEventListener('click', () => {
 
 // ---------- Boot ----------
 (async function init(){
-  // Theme first: charts read the active palette at creation and on change.
+  // Router first: the restored/deep-linked view becomes active before any
+  // data loads, so charts render straight into visible containers.
+  document.querySelectorAll('[data-nav]').forEach(b =>
+    b.addEventListener('click', () => navigate(b.dataset.nav)));
+  initRouter(applyView);
+  // Theme next: charts read the active palette at creation and on change.
   initTheme(applyChartTheme);
   // Saved tab selections next, strictly before any data fetch: the initial
   // loadHistory()/loadDailySummary()/... below must render the restored
