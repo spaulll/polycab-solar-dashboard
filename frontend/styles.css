@@ -778,6 +778,48 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 }
 
 /* ==========================================================================
+    Micro-interactions — shared press states & focus rings
+   ========================================================================== */
+
+/* Press feedback: everything clickable compresses slightly. */
+.range-toggle button:active,
+.view-nav button:active,
+.tabbar button:active,
+.btn:active,
+.weather-chip:active,
+.theme-toggle:active,
+.weather-close:active{
+  transform: scale(0.97);
+}
+
+/* One visible-keyboard-focus treatment everywhere: amber hairline ring. */
+.range-toggle button:focus-visible,
+.view-nav button:focus-visible,
+.tabbar button:focus-visible,
+.btn:focus-visible,
+.weather-chip:focus-visible,
+.theme-toggle:focus-visible,
+.weather-close:focus-visible,
+select:focus-visible,
+.date-range input[type="date"]:focus-visible{
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .range-toggle button:active,
+  .view-nav button:active,
+  .tabbar button:active,
+  .btn:active,
+  .weather-chip:active,
+  .theme-toggle:active,
+  .weather-close:active{
+    transform: none;
+  }
+}
+
+/* ==========================================================================
    Buttons & inputs
    ========================================================================== */
 
@@ -1171,6 +1213,7 @@ footer{
   .weather-card{
     width: 340px;
     max-height: none;
+    padding: 18px 18px 14px;
     border-radius: var(--radius);
     transform: scale(0.96) translateY(-6px);
     transition: transform 0.2s ease;

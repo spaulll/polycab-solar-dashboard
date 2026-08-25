@@ -7,14 +7,14 @@ import { sparkline } from './svg.js';
 
 const WINDOW_MS = 30 * 60 * 1000;
 
-// metric key -> CSS color source (currentColor inherits from .spark)
+// One sparkline per tile; the metric comes from data-spark on the .spark
+// element (the Grid V/A card tracks current -- the live-er of the two).
 const TILES = [
-  { key: 'Solar_Input',   selector: '[data-tile="Solar_Input"] .spark' },
-  { key: 'L1_Voltage',    selector: '[data-tile="L1_Voltage"] .spark' },
-  { key: 'L1_Current',    selector: '[data-tile="L1_Current"] .spark' },
-  { key: 'Inverter_Power',selector: '[data-tile="Inverter_Power"] .spark' },
-  { key: 'Temperature',   selector: '[data-tile="Temperature"] .spark' },
-  { key: 'E_Today',       selector: '[data-tile="E_Today"] .spark' },
+  'Solar_Input',
+  'L1_Current',
+  'Inverter_Power',
+  'Temperature',
+  'E_Today',
 ];
 
 const holders = new Map();  // metric -> container element
@@ -22,11 +22,11 @@ const buffers = new Map();  // metric -> [{t, v}]
 let maxPoints = 400;        // safety cap (~30 min at 5s sampling)
 
 function initTiles(){
-  for(const t of TILES){
-    const holder = document.querySelector(t.selector);
-    if(holder) holders.set(t.key, holder);
-    buffers.set(t.key, []);
-  }
+  document.querySelectorAll('.spark[data-spark]').forEach(holder => {
+    const key = holder.dataset.spark;
+    holders.set(key, holder);
+    buffers.set(key, []);
+  });
 }
 
 function pushSample(reading){
