@@ -208,25 +208,6 @@
   <!-- ============ Live view: now-moments + today's chart + status ============ -->
   <section class="view active" data-view="live">
 
-  <!-- ================= Sun path ================= -->
-  <div class="sun-arc-card" id="sunArcCard">
-    <div class="sun-arc-plot" id="sunArcPlot" role="img" aria-label="Today's sun path"></div>
-    <div class="sun-arc-data">
-      <span class="arc-endpoint">
-        <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunrise"/></svg>
-        <span class="rail-value" id="sunNextSunrise">–</span>
-      </span>
-      <span class="sun-countdown">
-        <span class="rail-label" id="sunCountdownLabel">Time to sunset</span>
-        <span class="rail-value accent" id="sunCountdown">–</span>
-      </span>
-      <span class="arc-endpoint">
-        <span class="rail-value" id="sunNextSunset">–</span>
-        <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunset"/></svg>
-      </span>
-    </div>
-  </div>
-
   <!-- ================= Night banner ================= -->
   <div class="night-banner" id="nightBanner">
     <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-moon"/></svg>
@@ -291,6 +272,25 @@
     </section>
 
     <aside class="col-side">
+
+      <!-- Sun path dial -->
+      <div class="sun-arc-card" id="sunArcCard">
+        <div class="sun-arc-plot" id="sunArcPlot" role="img" aria-label="Today's sun path"></div>
+        <div class="sun-arc-data">
+          <span class="arc-endpoint">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunrise"/></svg>
+            <span class="rail-value" id="sunNextSunrise">–</span>
+          </span>
+          <span class="sun-countdown">
+            <span class="rail-label" id="sunCountdownLabel">Time to sunset</span>
+            <span class="rail-value accent" id="sunCountdown">–</span>
+          </span>
+          <span class="arc-endpoint">
+            <span class="rail-value" id="sunNextSunset">–</span>
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunset"/></svg>
+          </span>
+        </div>
+      </div>
 
       <!-- Inverter status -->
       <div class="panel">
