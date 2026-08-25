@@ -307,16 +307,17 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-1);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-4);
+  padding: var(--space-3);
   margin-bottom: 0;
 }
 
 .sun-arc-plot{
-  width: min(100%, 300px);
+  width: min(100%, 216px);
   color: var(--accent);
 }
 
@@ -344,12 +345,12 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 /* Label row: sunrise | countdown | sunset, aligned under the dial. */
 .sun-arc-data{
-  width: min(100%, 300px);
+  width: min(100%, 240px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: var(--space-2);
+  margin-top: 0;
 }
 
 .arc-endpoint{
@@ -1627,7 +1628,7 @@ footer{
   .topbar-actions{ margin-left: auto; }
 
   /* --- Sun path card: slightly smaller dial, labels keep the rhythm --- */
-  .sun-arc-plot,
+  .sun-arc-plot{ width: min(100%, 240px); }
   .sun-arc-data{ width: min(100%, 260px); }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the

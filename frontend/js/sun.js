@@ -17,10 +17,11 @@ const el = id => document.getElementById(id);
 const plot = el('sunArcPlot');
 const card = el('sunArcCard');
 
-// Geometry (viewBox units). The canvas reserves room below the horizon for
-// the moon path / ground glow so day and night share one composition.
-const W = 240, H = 176;
-const CX = 120, CY = 112, R = 92, RM = 44;
+// Geometry (viewBox units). The canvas reserves a slim band below the
+// horizon for the moon path / ground glow so day and night share one
+// composition without inflating the card's height.
+const W = 240, H = 156;
+const CX = 120, CY = 112, R = 92, RM = 36;
 
 let sunTargetSunrise = null; // Date — next sunrise
 let sunTargetSunset = null;  // Date — next sunset
@@ -71,7 +72,7 @@ function buildArc(){
 
   // Ground glow hugging the horizon (day only).
   const ground = svgEl('rect', {
-    x: CX - R, y: CY, width: R * 2, height: 26,
+    x: CX - R, y: CY, width: R * 2, height: 20,
     fill: 'url(#sa-ground)', opacity: 0,
     class: 'sun-arc-ground',
   });
