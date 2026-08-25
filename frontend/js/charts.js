@@ -21,8 +21,20 @@ import { GAP_THRESHOLD_MS, MAX_POINTS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
 import { fetchTodayProjection } from './api.js';
+import { prefersReducedMotion } from './motion.js';
 
 const el = id => document.getElementById(id);
+
+// Dataset entry animation for range switches: the live-append path always
+// updates with 'none', but a fresh dataset may slide in once.
+function animatedUpdate(chart){
+  const prev = chart.options.animation?.duration ?? 0;
+  if(!prefersReducedMotion()){
+    chart.options.animation.duration = 300;
+  }
+  chart.update();
+  setTimeout(() => { chart.options.animation.duration = prev; }, 350);
+}
 
 const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
 const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
@@ -181,6 +193,7 @@ const powerChart = new Chart(el('powerChart').getContext('2d'), {
       y: {
         beginAtZero: true,
         grace: '8%',
+        border: { display: false },
         grid: { color: themeColors.grid, drawTicks: false },
         title: { display: true, text: 'Watts', color: themeColors.axisTitle, font:{size:10} },
       }
@@ -345,7 +358,7 @@ function renderRolling(readings){
   });
   setInteraction('realtime');
   setTooltipCallbacks({});
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- View: Today (current solar day) ----------
@@ -368,7 +381,7 @@ function renderToday(readings, sunInfo){
     setTooltipCallbacks({});
     const clock = sunrise.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     setChartMsg(`Night — today's solar session begins at ${clock}`);
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
 
@@ -401,7 +414,7 @@ function renderToday(readings, sunInfo){
   });
   // Case D -- correct daylight axis, simply no readings yet today.
   setChartMsg(scoped.length ? null : 'No readings yet today');
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- Today's projected finish (typical-day overlay + pace tag) ----------
@@ -564,7 +577,7 @@ function renderSessions(sessions){
     setInteraction('realtime');
     setTooltipCallbacks({});
     setChartMsg('No daylight readings in this period');
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
   setChartMsg(null);
@@ -641,7 +654,7 @@ function renderSessions(sessions){
       return p && p.off !== undefined ? [`${fmtSolarOffset(p.off)} after sunrise`] : [];
     },
   });
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- View: All (long-term normalized profile) ----------
@@ -656,7 +669,7 @@ function renderProfile(profile){
     setInteraction('solar');
     setTooltipCallbacks({});
     setChartMsg('Not enough history yet');
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
   setChartMsg(null);
@@ -698,7 +711,7 @@ function renderProfile(profile){
       return p ? [`from ${p.n} day-sample${p.n === 1 ? '' : 's'}`] : [];
     },
   });
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- Entry point ----------

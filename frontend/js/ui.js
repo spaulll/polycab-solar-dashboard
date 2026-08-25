@@ -1,11 +1,14 @@
 // Status pills, night banner, and stat-card DOM updates.
-// Pure DOM layer: no fetching, no sockets, no charts.
+// Pure DOM layer: no fetching, no sockets, no charts. Numeric values run
+// through motion.js tickers; units render as static chips beside them.
 
-import { fmt, fmtTime, fmtEnergy } from './format.js';
+import { fmtTime } from './format.js';
 import { setNightMode } from './state.js';
+import { tweenNumber } from './motion.js';
 
 const el = id => document.getElementById(id);
 
+const connPill = el('connDot')?.closest('.pill');
 const connDot = el('connDot'), connText = el('connText');
 const modeDot = el('modeDot'), modeText = el('modeText');
 const nightBanner = el('nightBanner'), nightText = el('nightText');
@@ -13,9 +16,36 @@ const lastUpdated = el('lastUpdated');
 const invStatusEl = el('invStatus'), invOfflineTimer = el('invOfflineTimer');
 const invLastReading = el('invLastReading'), invLastError = el('invLastError');
 
-function setConn(state){ // 'live' | 'down'
-  connDot.className = 'dot ' + (state === 'live' ? 'live' : 'down');
-  connText.textContent = state === 'live' ? 'live' : 'disconnected';
+// ---------- Connection pill ----------
+// States: 'live' (green), 'syncing' (degraded: WS down, reconnecting),
+// 'offline' (degraded, sustained). While degraded the dot pulses; after
+// ESCALATE_MS the label flips to "offline · Xm".
+const ESCALATE_MS = 20000;
+let degradedSince = null;
+let escalateTimer = null;
+
+function setConn(state){ // 'live' | 'syncing'
+  if(state === 'live'){
+    degradedSince = null;
+    if(escalateTimer){ clearInterval(escalateTimer); escalateTimer = null; }
+    connDot.className = 'dot live';
+    connText.textContent = 'live';
+    connPill.classList.remove('degraded');
+    return;
+  }
+  // degraded
+  if(degradedSince === null){
+    degradedSince = Date.now();
+    escalateTimer = setInterval(tickDegraded, 10000);
+  }
+  connDot.className = 'dot down';
+  connText.textContent = 'syncing…';
+  connPill.classList.add('degraded');
+}
+
+function tickDegraded(){
+  const mins = Math.floor((Date.now() - degradedSince) / 60000);
+  if(mins >= 1) connText.textContent = `offline · ${mins}m`;
 }
 
 // Transient read errors keep the green dot but explain the stall.
@@ -37,19 +67,15 @@ function setNightText(text){
 const NIGHT_TEXT_DEFAULT = 'Inverter is asleep. Waiting for sunrise…';
 
 function updateStatCards(d){
-  el('statSolar').innerHTML = fmt(d.Solar_Input, 0) + unit('W');
+  tweenNumber(el('statSolar'), d.Solar_Input, 0);
   // Both grid metrics on one line: "218.5 V / 2.14 A".
-  el('statGrid').innerHTML =
-    fmt(d.L1_Voltage, 1) + unit('V') +
-    ' <span class="sep">/</span> ' +
-    fmt(d.L1_Current, 2) + unit('A');
-  el('statInvPower').innerHTML = fmt(d.Inverter_Power, 0) + unit('W');
-  el('statTemp').innerHTML = fmt(d.Temperature, 0) + unit('°C');
-  el('statToday').innerHTML = fmt(d.E_Today, 2) + unit('kWh');
-  el('statLifetime').innerHTML = fmt(d.E_Total, 1) + unit('kWh');
+  tweenNumber(el('statGridV'), d.L1_Voltage, 1);
+  tweenNumber(el('statGridA'), d.L1_Current, 2);
+  tweenNumber(el('statInvPower'), d.Inverter_Power, 0);
+  tweenNumber(el('statTemp'), d.Temperature, 0);
+  tweenNumber(el('statToday'), d.E_Today, 2);
+  tweenNumber(el('statLifetime'), d.E_Total, 1);
 }
-
-const unit = name => '<span class="unit">' + name + '</span>';
 
 function dimStatCards(dim){
   document.querySelectorAll('.stat-card').forEach(c => c.classList.toggle('dim', dim));
@@ -68,17 +94,33 @@ const GEN_SLOTS = [
   ['genYear', 'this_year'],
 ];
 
+function setEnergy(id, kwh){
+  const numEl = el(id), unitEl = numEl.parentElement.querySelector('.unit');
+  const parts = fmtEnergyLocal(kwh);
+  tweenNumber(numEl, parts ? parts.n : null, parts ? parts.digits : 1);
+  if(unitEl) unitEl.textContent = parts ? parts.unit : '';
+}
+
+// Local adapter so this module keeps its own digits policy:
+// kWh below a megawatt-hour shows one decimal, MWh two.
+function fmtEnergyLocal(kwh){
+  if(kwh === null || kwh === undefined || Number.isNaN(Number(kwh))) return null;
+  const n = Number(kwh);
+  return n >= 1000
+    ? { n: n / 1000, digits: 2, unit: 'MWh' }
+    : { n, digits: 1, unit: 'kWh' };
+}
+
 function renderGenerationSummary(summary){
   for(const [id, key] of GEN_SLOTS){
-    const parts = fmtEnergy(summary?.[key]);
-    el(id).innerHTML = parts ? parts[0] + unit(parts[1]) : '–';
+    setEnergy(id, summary?.[key]);
   }
   // Wide card: calculated total is primary, the inverter's own counter sits
   // below it as a secondary line (the * links to the note under the strip).
-  const calc = fmtEnergy(summary?.calculated_total);
-  el('genCalculated').innerHTML = calc ? calc[0] + unit(calc[1]) : '–';
-  const inv = fmtEnergy(summary?.inverter_lifetime);
-  el('genInverterLifetime').innerHTML = inv ? inv[0] + unit(inv[1]) : '–';
+  setEnergy('genCalculated', summary?.calculated_total);
+  const inv = fmtEnergyLocal(summary?.inverter_lifetime);
+  tweenNumber(el('genInverterLifetime'), inv ? inv.n : null, inv ? inv.digits : 1);
+  el('genInverterLifetimeUnit').textContent = inv ? ' ' + inv.unit : '';
 }
 
 // ---------- Inverter status card ----------

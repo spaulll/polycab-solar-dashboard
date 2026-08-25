@@ -18,12 +18,14 @@ function connectWebSocket(onMessage){
   };
 
   socket.onclose = () => {
-    setConn('down');
+    // Degraded, not dead: reconnects are automatic. The pill escalates
+    // from "syncing…" to "offline · Xm" on its own schedule (ui.js).
+    setConn('syncing');
     scheduleReconnect();
   };
 
   socket.onerror = () => {
-    setConn('down');
+    setConn('syncing');
   };
 
   socket.onmessage = (event) => {

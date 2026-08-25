@@ -23,6 +23,7 @@ import { initWeather } from './weather.js';
 import { initTheme } from './theme.js';
 import { applyChartTheme } from './charts.js';
 import { VIEWS, initRouter, navigate } from './router.js';
+import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
 
 // ---------- View switching ----------
 // The router owns which view is current; this layer applies it to the DOM.
@@ -104,6 +105,8 @@ async function loadHistory(){
       const {readings, sun} = await fetchHistory(state.range);
       renderHistory(readings, sun);
       computeInsights(readings);
+      // Seed the live-tile sparkline window (it self-trims to ~30 min).
+      if(readings.length) seedFromReadings(readings.slice(-120));
       if(state.range === 'today') loadTodayProjection();
     }
     // Pace tag follows the active range (hidden everywhere but today).
@@ -234,6 +237,7 @@ function handleWSMessage(msg){
     setMode(false);
     dimStatCards(false);
     updateStatCards(msg.data);
+    pushAndRender(msg.data);
     setLastUpdated(msg.data.timestamp);
     updateCurrentTemp(msg.data.Temperature);
     appendLivePoint(msg.data);
@@ -368,13 +372,16 @@ document.getElementById('csvBtn').addEventListener('click', () => {
 
 // ---------- Boot ----------
 (async function init(){
-  // Router first: the restored/deep-linked view becomes active before any
-  // data loads, so charts render straight into visible containers.
-  document.querySelectorAll('[data-nav]').forEach(b =>
-    b.addEventListener('click', () => navigate(b.dataset.nav)));
-  initRouter(applyView);
-  // Theme next: charts read the active palette at creation and on change.
-  initTheme(applyChartTheme);
+  document.body.classList.add('booting');
+  try{
+    // Router first: the restored/deep-linked view becomes active before any
+    // data loads, so charts render straight into visible containers.
+    document.querySelectorAll('[data-nav]').forEach(b =>
+      b.addEventListener('click', () => navigate(b.dataset.nav)));
+    initRouter(applyView);
+    initTiles();
+    // Theme next: charts read the active palette at creation and on change.
+    initTheme(applyChartTheme);
   // Saved tab selections next, strictly before any data fetch: the initial
   // loadHistory()/loadDailySummary()/... below must render the restored
   // views, never the hardcoded defaults.
@@ -407,4 +414,9 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   setInterval(refreshSunInfo, SUN_INFO_REFRESH_MS);
   // Weather chip: independent fixed schedule (server caches provider calls).
   initWeather();
+  }
+  finally{
+    // First data pass done (or failed honestly): retire the skeletons.
+    document.body.classList.remove('booting');
+  }
 })();
