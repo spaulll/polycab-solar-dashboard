@@ -1,7 +1,9 @@
 .env
+ANALYTICS_PLAN.md
 venv/
 .venv/
 solar_data.db
 solar_data.db-*
 __pycache__/
 *.pyc
+REDESIGN_PLAN.md

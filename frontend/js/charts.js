@@ -21,12 +21,37 @@ import { GAP_THRESHOLD_MS, MAX_POINTS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
 import { fetchTodayProjection } from './api.js';
+import { prefersReducedMotion } from './motion.js';
 
 const el = id => document.getElementById(id);
+
+// Dataset entry animation for range switches: the live-append path always
+// updates with 'none', but a fresh dataset may slide in once.
+function animatedUpdate(chart){
+  const prev = chart.options.animation?.duration ?? 0;
+  if(!prefersReducedMotion()){
+    chart.options.animation.duration = 300;
+  }
+  chart.update();
+  setTimeout(() => { chart.options.animation.duration = prev; }, 350);
+}
 
 const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
 const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
 const rgba = (rgb, a) => `rgba(${rgb},${a})`;
+
+// Vertical alpha ramp behind filled areas (amber/steel family). Scriptable,
+// so the gradient tracks the chart area through resizes and redraws.
+function areaFill(rgb, top = 0.26){
+  return ctx => {
+    const area = ctx.chart.chartArea;
+    if(!area) return rgba(rgb, top * 0.4);
+    const g = ctx.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    g.addColorStop(0, rgba(rgb, top));
+    g.addColorStop(1, rgba(rgb, 0.02));
+    return g;
+  };
+}
 
 // Active series colors; dark keeps the baseline constants, light swaps in
 // deeper variants so lines/bars hold contrast on white surfaces. Re-pointed
@@ -43,7 +68,7 @@ const CHART_THEMES = {
     // rgb triplet of `text` above -- lets neutral series join rgba() alpha
     // blends (weather-impact "cloudy" class) without a new hue.
     textRgb: '154,161,169',
-    grid: 'rgba(233,231,226,0.06)',
+    grid: 'rgba(233,231,226,0.045)',
     axisTitle: '#5f666e',
     tooltipBg: '#191c20',
     tooltipBorder: '#34383f',
@@ -59,7 +84,7 @@ const CHART_THEMES = {
     inverterRgb: '82,112,140',
     text: '#4d463e',
     textRgb: '77,70,62',
-    grid: 'rgba(27,23,19,0.11)',
+    grid: 'rgba(27,23,19,0.08)',
     axisTitle: '#6f675b',
     tooltipBg: '#fefdfb',
     tooltipBorder: '#c2bbb1',
@@ -79,6 +104,10 @@ function setChartDefaults(c){
   Chart.defaults.color = c.text;
   Chart.defaults.font.family = "ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
   Chart.defaults.font.size = 11;
+  // One tooltip skin for every chart: quiet panel card with hairline border.
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.titleMarginBottom = 8;
+  Chart.defaults.plugins.tooltip.boxPadding = 4;
 }
 setChartDefaults(themeColors);
 
@@ -181,6 +210,7 @@ const powerChart = new Chart(el('powerChart').getContext('2d'), {
       y: {
         beginAtZero: true,
         grace: '8%',
+        border: { display: false },
         grid: { color: themeColors.grid, drawTicks: false },
         title: { display: true, text: 'Watts', color: themeColors.axisTitle, font:{size:10} },
       }
@@ -192,6 +222,14 @@ const chartMsgEl = el('chartMsg');
 function setChartMsg(text){
   chartMsgEl.textContent = text || '';
   chartMsgEl.classList.toggle('show', !!text);
+}
+
+// Same overlay pattern for the other chart holders (empty/error states).
+function holderMsg(id, text){
+  const node = el(id);
+  if(!node) return;
+  node.textContent = text || '';
+  node.classList.toggle('show', !!text);
 }
 
 // ---------- Axis / legend / tooltip helpers ----------
@@ -282,7 +320,7 @@ function lineDataset({ label, data, rgb, alpha = 1, fill = false }){
     label,
     data,
     borderColor: rgba(rgb, alpha),
-    backgroundColor: fill ? rgba(rgb, 0.08) : 'transparent',
+    backgroundColor: fill ? areaFill(rgb) : 'transparent',
     borderWidth: 1.8,
     pointRadius: 0,
     pointHoverRadius: 4,
@@ -345,7 +383,7 @@ function renderRolling(readings){
   });
   setInteraction('realtime');
   setTooltipCallbacks({});
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- View: Today (current solar day) ----------
@@ -368,7 +406,7 @@ function renderToday(readings, sunInfo){
     setTooltipCallbacks({});
     const clock = sunrise.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     setChartMsg(`Night — today's solar session begins at ${clock}`);
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
 
@@ -401,7 +439,7 @@ function renderToday(readings, sunInfo){
   });
   // Case D -- correct daylight axis, simply no readings yet today.
   setChartMsg(scoped.length ? null : 'No readings yet today');
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- Today's projected finish (typical-day overlay + pace tag) ----------
@@ -564,7 +602,7 @@ function renderSessions(sessions){
     setInteraction('realtime');
     setTooltipCallbacks({});
     setChartMsg('No daylight readings in this period');
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
   setChartMsg(null);
@@ -641,7 +679,7 @@ function renderSessions(sessions){
       return p && p.off !== undefined ? [`${fmtSolarOffset(p.off)} after sunrise`] : [];
     },
   });
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- View: All (long-term normalized profile) ----------
@@ -656,7 +694,7 @@ function renderProfile(profile){
     setInteraction('solar');
     setTooltipCallbacks({});
     setChartMsg('Not enough history yet');
-    powerChart.update();
+    animatedUpdate(powerChart);
     return;
   }
   setChartMsg(null);
@@ -698,7 +736,7 @@ function renderProfile(profile){
       return p ? [`from ${p.n} day-sample${p.n === 1 ? '' : 's'}`] : [];
     },
   });
-  powerChart.update();
+  animatedUpdate(powerChart);
 }
 
 // ---------- Entry point ----------
@@ -778,6 +816,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
 });
 
 function renderDailySummary(days){
+  holderMsg('dailyChartMsg', days.length ? null : 'No data yet');
   dailyChart.data.labels = days.map(d => d.day);
   dailyChart.data.datasets[0].data = days.map(d => d.energy_kwh);
   dailyChart.update();
@@ -799,7 +838,7 @@ const cumulativeChart = new Chart(el('cumulativeChart').getContext('2d'), {
       label: 'Cumulative Energy (kWh)',
       data: [],
       borderColor: rgba(solarRgb, 0.9),
-      backgroundColor: rgba(solarRgb, 0.08),
+      backgroundColor: areaFill(solarRgb, 0.22),
       borderWidth: 1.8,
       pointRadius: 0,
       pointHoverRadius: 4,
@@ -844,6 +883,8 @@ function renderCumulative(days){
   const sliced = cumulativeRange === 'all'
     ? latestDailyDays
     : latestDailyDays.slice(-CUMULATIVE_RANGE_DAYS[cumulativeRange]);
+
+  holderMsg('cumulativeChartMsg', sliced.length ? null : 'No data yet');
 
   let total = 0;
   const points = sliced.map(d => {
@@ -1433,8 +1474,8 @@ function buildWeatherChart(){
           },
         },
         scales: {
-          x: { grid: { display: false }, ticks: { maxRotation: 0 } },
-          y: { beginAtZero: true, grace: '8%',
+          x: { grid: { display: false }, border: { display: false }, ticks: { maxRotation: 0 } },
+          y: { beginAtZero: true, grace: '8%', border: { display: false },
                grid: { color: themeColors.grid, drawTicks: false },
                title: { display: true, text: 'kWh', color: themeColors.axisTitle, font:{size:10} } },
         },
@@ -1494,10 +1535,11 @@ function buildWeatherChart(){
             type: 'linear', min: 0, max: 100,
             grid: { color: themeColors.grid, drawTicks: false },
             ticks: { maxRotation: 0, autoSkipPadding: 20, callback: v => `${v}%` },
+            border: { display: false },
             title: { display: true, text: 'mean cloud cover', color: themeColors.axisTitle, font:{size:10} },
           },
           y: {
-            beginAtZero: true, grace: '8%',
+            beginAtZero: true, grace: '8%', border: { display: false },
             grid: { color: themeColors.grid, drawTicks: false },
             title: { display: true, text: 'kWh', color: themeColors.axisTitle, font:{size:10} },
           },
@@ -1563,7 +1605,7 @@ function applyChartTheme(themeName){
   // follow the theme without waiting for the next data render.
   dailyChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.8);
   cumulativeChart.data.datasets[0].borderColor = rgba(solarRgb, 0.9);
-  cumulativeChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.08);
+  cumulativeChart.data.datasets[0].backgroundColor = areaFill(solarRgb, 0.22);
   // The dashed projection line derives from the live solar rgb too.
   for(const ds of powerChart.data.datasets){
     if(ds.isTypical) ds.borderColor = rgba(solarRgb, TYPICAL_ALPHA);
@@ -1579,6 +1621,7 @@ function applyChartTheme(themeName){
     for(const scale of Object.values(chart.options.scales)){
       if(scale.grid) scale.grid.color = c.grid;
       if(scale.title?.color) scale.title.color = c.axisTitle;
+      if(scale.border) scale.border.display = false;
     }
     chart.update('none');
   }

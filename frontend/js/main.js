@@ -22,6 +22,37 @@ import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
 import { initTheme } from './theme.js';
 import { applyChartTheme } from './charts.js';
+import { VIEWS, initRouter, navigate } from './router.js';
+import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
+import { initSegmented } from './segmented.js';
+import { toast } from './toast.js';
+import { initPullToRefresh } from './pullRefresh.js';
+
+// ---------- View switching ----------
+// The router owns which view is current; this layer applies it to the DOM.
+// Inactive views go display:none (no offscreen chart work). When the
+// View Transitions API is available and motion is allowed, the swap runs
+// as a transition; otherwise it's an instant class toggle backed by the
+// CSS slide-fade on .view.active.
+
+function setViewActive(view){
+  document.querySelectorAll('.view').forEach(s =>
+    s.classList.toggle('active', s.dataset.view === view));
+  document.querySelectorAll('[data-nav]').forEach(b =>
+    b.classList.toggle('active', b.dataset.nav === view));
+  // Lets visual widgets (e.g. sliding range indicators) re-measure now
+  // that their containers left display:none.
+  window.dispatchEvent(new CustomEvent('viewchange', { detail: view }));
+}
+
+function applyView(view, prev){
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(prev === null || reduceMotion || !document.startViewTransition){
+    setViewActive(view);
+    return;
+  }
+  document.startViewTransition(() => setViewActive(view));
+}
 
 // ---------- Powercuts counter ----------
 let pcRange = 'today';
@@ -80,6 +111,8 @@ async function loadHistory(){
       const {readings, sun} = await fetchHistory(state.range);
       renderHistory(readings, sun);
       computeInsights(readings);
+      // Seed the live-tile sparkline window (it self-trims to ~30 min).
+      if(readings.length) seedFromReadings(readings.slice(-120));
       if(state.range === 'today') loadTodayProjection();
     }
     // Pace tag follows the active range (hidden everywhere but today).
@@ -210,6 +243,7 @@ function handleWSMessage(msg){
     setMode(false);
     dimStatCards(false);
     updateStatCards(msg.data);
+    pushAndRender(msg.data);
     setLastUpdated(msg.data.timestamp);
     updateCurrentTemp(msg.data.Temperature);
     appendLivePoint(msg.data);
@@ -340,12 +374,36 @@ document.getElementById('pcRange').addEventListener('change', (e) => {
 
 document.getElementById('csvBtn').addEventListener('click', () => {
   window.location.href = csvExportURL(state.range);
+  toast(`CSV export for ${state.range === 'all' ? 'all data' : state.range} downloading`, 'ok');
 });
+
+// ---------- Live pull-to-refresh ----------
+// Same loaders as the wake_up path minus the full panel sweep: the polling
+// intervals keep the rest fresh anyway.
+function refreshLive(){
+  return Promise.allSettled([
+    loadInitialStatus(),
+    loadHistory(),
+    loadDailySummary(),
+    loadGenerationSummary(),
+    loadPowercutCount(),
+  ]);
+}
 
 // ---------- Boot ----------
 (async function init(){
-  // Theme first: charts read the active palette at creation and on change.
-  initTheme(applyChartTheme);
+  document.body.classList.add('booting');
+  try{
+    // Router first: the restored/deep-linked view becomes active before any
+    // data loads, so charts render straight into visible containers.
+    document.querySelectorAll('[data-nav]').forEach(b =>
+      b.addEventListener('click', () => navigate(b.dataset.nav)));
+    initRouter(applyView);
+    initTiles();
+    // Sliding indicators for every range toggle (visual only).
+    initSegmented();
+    // Theme next: charts read the active palette at creation and on change.
+    initTheme(applyChartTheme);
   // Saved tab selections next, strictly before any data fetch: the initial
   // loadHistory()/loadDailySummary()/... below must render the restored
   // views, never the hardcoded defaults.
@@ -378,4 +436,11 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   setInterval(refreshSunInfo, SUN_INFO_REFRESH_MS);
   // Weather chip: independent fixed schedule (server caches provider calls).
   initWeather();
+  // Touch-only pull gesture on the Live view.
+  initPullToRefresh(refreshLive);
+  }
+  finally{
+    // First data pass done (or failed honestly): retire the skeletons.
+    document.body.classList.remove('booting');
+  }
 })();

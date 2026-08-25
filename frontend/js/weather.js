@@ -13,31 +13,17 @@ const overlay = el('weatherOverlay');
 
 let weatherData = null;
 
-// ---------- Icon SVGs ----------
-// One compact line-icon per common icon name; stroke uses currentColor so
-// the theme controls tinting.
-const ICON_PATHS = {
-  'sun': `<circle cx="12" cy="12" r="4.4" fill="none"/>
-    <g stroke-linecap="round"><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.8 1.8M17.2 17.2 19 19M5 19l1.8-1.8M17.2 6.8 19 5"/></g>`,
-  'partly-cloudy': `<circle cx="15.5" cy="7" r="3" fill="none"/>
-    <g stroke-linecap="round"><path d="M15.5 1.8v1M20.7 7h1M19.3 3.2l-.8.8M11.7 4l-.8-.8"/></g>
-    <path d="M6 18a3 3 0 0 1-.2-6 4.2 4.2 0 0 1 8.2-1A3.3 3.3 0 0 1 16 18z" fill="none"/>`,
-  'cloudy': `<path d="M6.5 18a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 18z" fill="none"/>`,
-  'fog': `<path d="M6.5 15a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 15z" fill="none"/>
-    <g stroke-linecap="round"><path d="M5 18h14M7 21h10"/></g>`,
-  'drizzle': `<path d="M6.5 13a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 13z" fill="none"/>
-    <g stroke-linecap="round"><path d="M9 16v1.5M13 16v1.5M11 19.5V21M15 19.5V21"/></g>`,
-  'rain': `<path d="M6.5 13a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 13z" fill="none"/>
-    <g stroke-linecap="round"><path d="M8.5 15.5 7.5 19M12.5 15.5l-1 3.5M16.5 15.5l-1 3.5M10.5 20l-.5 1.5"/></g>`,
-  'snow': `<path d="M6.5 13a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 13z" fill="none"/>
-    <g stroke-linecap="round"><path d="M8.5 17h.01M12.5 17h.01M16.5 17h.01M10.5 20.5h.01M14.5 20.5h.01"/></g>`,
-  'thunder': `<path d="M6.5 12a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 12h-3z" fill="none"/>
-    <path d="m12.5 11.5-3 5h2.5l-1.5 5 4.5-6.5h-2.5z"/>`,
-};
+// ---------- Icons ----------
+// All weather glyphs live in the index.html <symbol> sprite (wi-*); here we
+// only stamp out <use> references. Unknown names fall back to the cloud.
+const WEATHER_ICONS = new Set([
+  'sun', 'partly-cloudy', 'cloudy', 'fog',
+  'drizzle', 'rain', 'snow', 'thunder',
+]);
 
 function iconSVG(name){
-  return `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
-           stroke-width="1.4" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS['cloudy']}</svg>`;
+  const id = WEATHER_ICONS.has(name) ? name : 'cloudy';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#wi-${id}"/></svg>`;
 }
 
 // ---------- Rendering ----------
@@ -119,7 +105,7 @@ function openPopup(){
 function closePopup(){
   overlay.classList.remove('open');
   chip.setAttribute('aria-expanded', 'false');
-  setTimeout(() => { overlay.hidden = true; }, 220); // match CSS fade-out
+  setTimeout(() => { overlay.hidden = true; }, 260); // match CSS fade-out
 }
 
 chip.addEventListener('click', () => {
@@ -133,6 +119,48 @@ overlay.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && !overlay.hidden) closePopup();
 });
+
+// ---------- Bottom sheet drag (touch) ----------
+// The sheet follows the pointer below its rest position; releasing past a
+// threshold dismisses it, otherwise it springs back. The handle is hidden
+// on desktop, so this stays inert there.
+(function initSheetDrag(){
+  const card = overlay.querySelector('.weather-card');
+  const handle = el('weatherDrag');
+  let active = false, startY = 0, dy = 0;
+
+  handle.addEventListener('pointerdown', e => {
+    if(overlay.hidden || !overlay.classList.contains('open')) return;
+    active = true;
+    startY = e.clientY;
+    dy = 0;
+    card.style.transition = 'none';
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if(!active) return;
+    dy = Math.max(0, e.clientY - startY);
+    card.style.transform = `translateY(${dy}px)`;
+    // Fade the sheet slightly as it travels for a physical feel.
+    card.style.opacity = String(Math.max(0.55, 1 - dy / 400));
+  });
+
+  const release = () => {
+    if(!active) return;
+    active = false;
+    card.style.transition = '';
+    card.style.opacity = '';
+    if(dy > 90){
+      card.style.transform = '';
+      closePopup();
+    }else{
+      card.style.transform = '';
+    }
+  };
+  handle.addEventListener('pointerup', release);
+  handle.addEventListener('pointercancel', release);
+})();
 
 export function initWeather(){
   loadWeather();

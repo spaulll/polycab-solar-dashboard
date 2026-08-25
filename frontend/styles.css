@@ -6,6 +6,45 @@
 :root{
   color-scheme: dark;
 
+  /* -----------------------------------------------------------------
+     Instrument v2 design tokens. Additive substrate: existing rules
+     may reference these, but token values themselves are frozen.
+     ----------------------------------------------------------------- */
+
+  /* Space scale — 4px base (--space-1..8) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radii scale (--radius-1..4); --radius kept as the legacy alias */
+  --radius-1: 3px;
+  --radius-2: 4px;
+  --radius-3: 6px;
+  --radius-4: 8px;
+
+  /* Type scale (--font-size-1..6): 11/12/14/17/22/30.
+     Sizes below the scale (9/10px) and clamp()ed display sizes remain
+     literal until later passes migrate them deliberately. */
+  --font-size-1: 11px;
+  --font-size-2: 12px;
+  --font-size-3: 14px;
+  --font-size-4: 17px;
+  --font-size-5: 22px;
+  --font-size-6: 30px;
+
+  /* Motion tokens — transform/opacity-only animations in later layers
+     must use these durations/easings, gated by prefers-reduced-motion. */
+  --dur-fast: 0.15s;
+  --dur-med: 0.25s;
+  --dur-slow: 0.4s;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
   /* Surfaces */
   --bg: #101113;
   --panel: #15171a;
@@ -39,7 +78,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
 
-  --radius: 6px;
+  --radius: var(--radius-3);
 }
 
 /* Light theme — daylight instrument panel on warm paper. Cards sit on a
@@ -83,26 +122,38 @@
   /* Minimal lift so panels separate from the page without Material-style
      elevation; dark keeps none. */
   --shadow-panel: 0 1px 2px rgba(51, 42, 30, 0.07), 0 2px 6px rgba(51, 42, 30, 0.06);
+
+  /* Faint warm tint behind chart plots (dark keeps the bare panel). */
+  --chart-wash: #faf7f2;
 }
 
 *{ box-sizing: border-box; }
 html, body{ margin: 0; padding: 0; }
 
+/* Icon sprite: defined once, painted only through <use> references. */
+.icon-defs{
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 body{
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--font-size-3);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color var(--dur-med) ease, color var(--dur-med) ease;
 }
 
 .wrap{
   max-width: 1240px;
   margin: 0 auto;
-  padding: 22px 22px 48px;
+  /* Bottom clearance: the floating view dock overlays every page. */
+  padding: 22px 22px calc(88px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ==========================================================================
@@ -113,15 +164,15 @@ body{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding-bottom: 16px;
+  padding-bottom: var(--space-4);
 }
 
 .brand{
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .brand-mark{
@@ -141,7 +192,7 @@ body{
 
 .brand-sub{
   display: block;
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--faint);
   letter-spacing: 0.06em;
 }
@@ -163,9 +214,9 @@ body{
 
 .updated{
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--faint);
-  margin-right: 4px;
+  margin-right: var(--space-1);
   white-space: nowrap;
 }
 
@@ -178,7 +229,7 @@ body{
   border-radius: 999px;
   background: var(--panel);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--dim);
   white-space: nowrap;
 }
@@ -195,32 +246,126 @@ body{
 .dot.down{ background: var(--err); }
 .dot.night{ background: var(--night); }
 
-/* ==========================================================================
-   Sun rail
-   ========================================================================== */
-
-.sun-rail{
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding: 10px 2px;
-  margin-bottom: 16px;
+/* Degraded connection (syncing / offline): pulse the whole pill gently so
+   the state reads at a glance without reading any text. */
+.pill.degraded{
+  border-color: var(--err);
+  animation: pill-pulse 2s var(--ease-out) infinite;
 }
 
-.rail-item{
+@keyframes pill-pulse{
+  0%, 100%{ box-shadow: 0 0 0 0 transparent; }
+  50%{ box-shadow: 0 0 0 3px var(--accent-dim); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .pill.degraded{ animation: none; }
+}
+
+/* ==========================================================================
+    Boot skeletons — first-load placeholders, sized to the final layout
+   ========================================================================== */
+
+/* While body.booting is set, value elements keep their layout box but hide
+   their placeholder glyphs behind a shimmer block. Removed once the first
+   data pass lands, so "–" is never what a user sees on load. */
+body.booting :is(.stat-value .num, .gen-value .num, .insight-value){
+  color: transparent !important;
+  position: relative;
+}
+
+body.booting :is(.stat-value .num, .gen-value .num, .insight-value)::before{
+  content: "";
+  position: absolute;
+  inset: 12% 0 auto 0;
+  height: 60%;
+  border-radius: var(--radius-1);
+  background: linear-gradient(100deg,
+      var(--panel-2) 32%, var(--line) 50%, var(--panel-2) 68%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
+
+@keyframes shimmer{
+  from{ background-position: 120% 0; }
+  to{ background-position: -80% 0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  body.booting :is(.stat-value .num, .gen-value .num, .insight-value)::before{
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+    Sun path card — SVG instrument dial + countdown
+   ========================================================================== */
+
+.sun-arc-card{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-3);
+  margin-bottom: 0;
+}
+
+.sun-arc-plot{
+  width: min(100%, 216px);
+  color: var(--accent);
+}
+
+.sun-arc-plot svg{ display: block; width: 100%; height: auto; }
+
+.sun-arc-card.night .sun-arc-plot{ color: var(--night); }
+
+/* The halo breathes softly; the disc itself stays still. */
+.sun-halo{
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: halo-pulse 3.2s ease-in-out infinite;
+}
+
+.sun-marker.moon .sun-halo{ animation-duration: 5s; opacity: 0.6; }
+
+@keyframes halo-pulse{
+  0%, 100%{ transform: scale(1); opacity: 1; }
+  50%{ transform: scale(1.25); opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sun-halo{ animation: none; }
+}
+
+/* Label row: sunrise | countdown | sunset, aligned under the dial. */
+.sun-arc-data{
+  width: min(100%, 240px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: 0;
+}
+
+.arc-endpoint{
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .rail-icon{
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   color: var(--faint);
-  align-self: center;
+  flex: none;
 }
 
 .rail-label{
@@ -232,13 +377,28 @@ body{
 
 .rail-value{
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--font-size-2);
   color: var(--dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .rail-value.accent{ color: var(--accent); }
 
-.rail-countdown{ margin-left: auto; }
+.sun-countdown{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+
+.sun-countdown .rail-value{
+  font-size: var(--font-size-4);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
 
 .rail-sep{
   width: 1px;
@@ -260,9 +420,10 @@ body{
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   color: var(--dim);
+  /* 13px is off-scale by design until the type pass migrates it */
   font-size: 13px;
   padding: 10px 14px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .night-banner.show{ display: flex; }
@@ -280,14 +441,14 @@ body{
 
 .stats{
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .stat-card{
@@ -299,6 +460,23 @@ body{
   min-width: 0;
   overflow: hidden;
 }
+
+/* Sparkline backdrop: last ~30 minutes of this metric, drawn behind the
+   value. Decorative only -- hidden until real samples exist. */
+.stat-card .spark{
+  position: absolute;
+  inset: auto 10px 8px 16px;
+  height: 30px;
+  width: calc(100% - 26px);
+  color: var(--steel);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.stat-card.solar .spark{ color: var(--accent); }
+
+.stat-card .spark svg{ display: block; width: 100%; height: 100%; }
+.stat-card .spark.empty{ display: none; }
 
 .stat-card::before{
   content: "";
@@ -346,12 +524,17 @@ body{
   font-size: clamp(14px, 1.35vw, 18px);
 }
 
+/* Unit chips: the metric's unit as a small quiet chip beside the number. */
 .stat-value .unit{
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 400;
   color: var(--dim);
-  margin-left: 3px;
+  margin-left: 6px;
   letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: 2px;
 }
 
 .stat-value .sep{
@@ -516,9 +699,9 @@ body{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   min-height: 56px;
   border-bottom: 1px solid var(--line);
 }
@@ -530,6 +713,32 @@ body{
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
+}
+
+/* Title + dynamic subtitle stack. The subtitle's line is ALWAYS reserved:
+   [hidden] only blanks it (visibility), so tags appearing/disappearing
+   never reflow the panel head. */
+.panel-head-main{
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.panel-subtitle{
+  margin: 3px 0 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  min-height: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-subtitle[hidden]{
+  display: block;
+  visibility: hidden;
 }
 
 .tag{
@@ -550,7 +759,7 @@ body{
 .tag[hidden]{ display: none; }
 
 .panel-body{
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 /* ==========================================================================
@@ -560,8 +769,10 @@ body{
 .range-toggle{
   display: inline-flex;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
 }
 
 .range-toggle button{
@@ -571,11 +782,13 @@ body{
   border-right: 1px solid var(--line-strong);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   letter-spacing: 0.06em;
   padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  position: relative;
+  z-index: 1;
+  transition: background var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast);
 }
 
 .range-toggle button:last-child{ border-right: none; }
@@ -591,6 +804,71 @@ body{
   box-shadow: inset 0 -2px 0 var(--accent-line);
 }
 
+/* With JS enhancement the indicator element carries the active surface and
+   slides between buttons; per-button active backgrounds switch off. */
+.range-toggle.seg{ isolation: isolate; }
+.range-toggle.seg button{ border-right-color: transparent; }
+.range-toggle.seg button:hover{ background: transparent; }
+.range-toggle.seg button.active{
+  background: transparent;
+  box-shadow: none;
+}
+
+.seg-ind{
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  z-index: -1;
+  background: var(--accent-dim);
+  box-shadow: inset 0 -2px 0 var(--accent-line);
+  transition: transform var(--dur-fast) var(--ease-out), width var(--dur-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .seg-ind{ transition: none; }
+}
+
+/* ==========================================================================
+    Micro-interactions — shared press states & focus rings
+   ========================================================================== */
+
+/* Press feedback: everything clickable compresses slightly. */
+.range-toggle button:active,
+.tabbar button:active,
+.btn:active,
+.weather-chip:active,
+.theme-toggle:active,
+.weather-close:active{
+  transform: scale(0.97);
+}
+
+/* One visible-keyboard-focus treatment everywhere: amber hairline ring. */
+.range-toggle button:focus-visible,
+.tabbar button:focus-visible,
+.btn:focus-visible,
+.weather-chip:focus-visible,
+.theme-toggle:focus-visible,
+.weather-close:focus-visible,
+select:focus-visible,
+.date-range input[type="date"]:focus-visible{
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .range-toggle button:active,
+  .tabbar button:active,
+  .btn:active,
+  .weather-chip:active,
+  .theme-toggle:active,
+  .weather-close:active{
+    transform: none;
+  }
+}
+
 /* ==========================================================================
    Buttons & inputs
    ========================================================================== */
@@ -601,14 +879,14 @@ body{
   gap: 7px;
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--font-size-2);
   padding: 6px 12px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
 
 .btn:hover{
@@ -624,13 +902,15 @@ body{
 select{
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   padding: 5px 24px 5px 10px;
   cursor: pointer;
+  /* Data-URI strokes can't read CSS vars; the hex values mirror --dim in
+     each theme (dark #9aa1a9 / light #4d463e) and must move with them. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239aa1a9' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
@@ -655,11 +935,11 @@ select:hover{ color: var(--text); }
 .date-range input[type="date"]{
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   padding: 5px 8px;
 }
 
@@ -668,7 +948,7 @@ select:hover{ color: var(--text); }
 .date-range .range-dash{
   color: var(--faint);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
 }
 
 /* ==========================================================================
@@ -685,10 +965,10 @@ select:hover{ color: var(--text); }
   height: 220px;
 }
 
-/* Light mode: faint cool tint defines the chart area against the white
+/* Light mode: faint warm tint defines the chart area against the white
    panel; dark keeps the panel surface. */
-[data-theme="light"] .chart-holder{
-  background: #faf7f2;
+.chart-holder{
+  background: var(--chart-wash, transparent);
 }
 
 .chart-msg{
@@ -840,7 +1120,7 @@ select:hover{ color: var(--text); }
 .loss-bar-fill{
   height: 100%;
   background: var(--steel);
-  transition: width 0.4s ease;
+  transition: width var(--dur-slow) ease;
 }
 
 /* Savings & Impact: one primary insight block over the shared meta rows.
@@ -916,15 +1196,15 @@ footer{
 .weather-icon svg{ width: 17px; height: 17px; color: var(--accent); }
 .weather-chip.unavailable .weather-icon svg{ color: var(--faint); }
 
-/* --- Overlay: dim + blur behind the popup card --- */
+/* --- Overlay: dim + blur behind the popup card / bottom sheet --- */
 .weather-overlay{
   position: fixed;
   inset: 0;
   z-index: 100;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: center;
-  padding: 96px 16px 16px;
+  padding: 0;
   background: var(--scrim-overlay);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -937,20 +1217,62 @@ footer{
 /* Explicit display above would beat [hidden]; restore it. */
 .weather-overlay[hidden]{ display: none; }
 
+/* Phone-first: a draggable bottom sheet. */
 .weather-card{
   position: relative;
-  width: 340px;
-  max-width: 100%;
-  padding: 18px 18px 14px;
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 6px 18px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--panel);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-4) var(--radius-4) 0 0;
   box-shadow: var(--shadow-card);
-  transform: scale(0.96) translateY(-6px);
-  transition: transform 0.2s ease;
+  transform: translateY(100%);
+  transition: transform 0.25s var(--ease-out);
+  touch-action: pan-y;
 }
 
-.weather-overlay.open .weather-card{ transform: scale(1) translateY(0); }
+.weather-overlay.open .weather-card{ transform: translateY(0); }
+
+/* Drag handle (touch affordance; hidden on desktop). */
+.weather-drag{
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 10px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.weather-drag:active{ cursor: grabbing; }
+
+.weather-drag-bar{
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+/* Desktop (>=1020px): centered modal card, as before. */
+@media (min-width: 1020px){
+  .weather-overlay{
+    align-items: flex-start;
+    padding: 96px 16px 16px;
+  }
+
+  .weather-card{
+    width: 340px;
+    max-height: none;
+    padding: 18px 18px 14px;
+    border-radius: var(--radius);
+    transform: scale(0.96) translateY(-6px);
+    transition: transform 0.2s ease;
+  }
+
+  .weather-overlay.open .weather-card{ transform: scale(1) translateY(0); }
+
+  .weather-drag{ display: none; }
+}
 
 .weather-close{
   position: absolute;
@@ -1049,6 +1371,76 @@ footer{
 }
 
 /* ==========================================================================
+    Toasts + pull-to-refresh hint
+   ========================================================================== */
+
+#toasts{
+  position: fixed;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast{
+  pointer-events: auto;
+  max-width: min(92vw, 420px);
+  padding: 9px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+
+.toast.in{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.out{
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.toast.ok{ border-color: var(--ok); }
+.toast.warn{ border-color: var(--err); }
+
+.pull-hint{
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: var(--font-size-1);
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+  pointer-events: none;
+}
+
+.pull-hint.show{ opacity: 1; }
+
+@media (prefers-reduced-motion: reduce){
+  .toast, .pull-hint{ transition: none; }
+}
+
+/* ==========================================================================
     Theme toggle — sun/moon cross-fade with a short rotation
     ========================================================================== */
 
@@ -1063,7 +1455,7 @@ footer{
   border-radius: 999px;
   background: var(--panel);
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.25s ease, color 0.25s ease;
+  transition: border-color var(--dur-med) ease, background-color var(--dur-med) ease, color var(--dur-med) ease;
 }
 
 .theme-toggle:hover{ border-color: var(--line-strong); }
@@ -1079,7 +1471,7 @@ footer{
   width: 15px;
   height: 15px;
   color: var(--accent);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity var(--dur-med) ease, transform var(--dur-med) ease;
 }
 
 /* Dark mode shows the moon; light mode shows the sun. The outgoing icon
@@ -1097,12 +1489,139 @@ footer{
 }
 
 /* ==========================================================================
+   Views & navigation — three-zone IA recomposed per breakpoint
+   ========================================================================== */
+
+.views{
+  position: relative;
+}
+
+/* Live hero: sun dial beside the stat tiles. The dial reads first in the
+   DOM, so phones stack it on top naturally. */
+.live-hero{
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1020px){
+  .live-hero{ grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Only the active view participates in layout and animation; inactive DOM
+   is display:none so hidden charts do zero work. */
+.view{ display: none; }
+.view.active{
+  display: block;
+  animation: view-in var(--dur-med) var(--ease-out);
+}
+
+@keyframes view-in{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .view.active{ animation-name: view-in-fade; }
+  @keyframes view-in-fade{
+    from{ opacity: 0; }
+    to{ opacity: 1; }
+  }
+}
+
+/* --- Floating view switcher: one 3D dock, every breakpoint --- */
+.tabbar{
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  /* Translucent glass: panel tint over a blurred backdrop.
+     Opaque fallback first for engines without color-mix. */
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  /* 3D: top light edge, dark underside, then two drop layers. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.30),
+    0 3px 8px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .tabbar{
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(51, 42, 30, 0.08),
+    0 12px 28px rgba(48, 39, 28, 0.22),
+    0 3px 8px rgba(48, 39, 28, 0.14);
+}
+
+.tabbar button{
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-height: 44px;
+  padding: 7px 18px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 999px;
+  transition: color var(--dur-fast), background var(--dur-fast),
+              box-shadow var(--dur-fast), transform var(--dur-fast) var(--ease-out);
+}
+
+.tabbar button svg{ width: 20px; height: 20px; }
+
+.tabbar button:hover{
+  color: var(--text);
+  background: var(--panel-2);
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+}
+
+/* Active tab reads raised: tinted top face, lit edge, grounded shadow. */
+.tabbar button.active{
+  color: var(--accent);
+  background: var(--accent-dim);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -2px 0 var(--accent-line),
+    0 3px 8px rgba(0, 0, 0, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .tabbar button,
+  .tabbar button.active{ transition: none; transform: none; }
+}
+
+/* Trends keeps its chart stack full width (no side column). */
+.layout.single{ grid-template-columns: minmax(0, 1fr); }
+.layout.single .col-main{ grid-template-columns: minmax(0, 1fr); }
+
+/* ==========================================================================
    Responsive — desktop first, still usable on phone
    ========================================================================== */
 
 @media (max-width: 1020px){
   .layout{ grid-template-columns: 1fr; }
-  .stats{ grid-template-columns: repeat(3, 1fr); }
 
   /* Keep the desktop 5-up KPI row instead of 3-up: 5 cards can never fill
      3 columns, and the leftover cell showed as a bare gap in the strip. */
@@ -1112,16 +1631,15 @@ footer{
 }
 
 @media (max-width: 620px){
-  .wrap{ padding: 14px 12px 32px; }
+  .wrap{ padding: 14px 12px calc(80px + env(safe-area-inset-bottom, 0px)); }
 
   /* --- Topbar: status cluster left, actions cluster right --- */
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
-  /* --- Sun rail: drop separators so wrapped rows never end on a "|" --- */
-  .sun-rail{ gap: 8px 18px; }
-  .rail-sep{ display: none; }
-  .rail-countdown{ margin-left: 0; }
+  /* --- Sun path card: slightly smaller dial, labels keep the rhythm --- */
+  .sun-arc-plot{ width: min(100%, 240px); }
+  .sun-arc-data{ width: min(100%, 260px); }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
          longest realistic readings on one line at 320px --- */

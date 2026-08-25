@@ -71,24 +71,31 @@ solar-dashboard/
 ├── .env.example               # Template for your real config -- copy to .env and fill in
 ├── requirements.txt
 └── frontend/
-    ├── index.html            # Markup only -- loads styles.css and /js/main.js
-    ├── styles.css            # All styling (dark theme)
+    ├── index.html            # Shell: icon sprite (<symbol> defs), three view sections, weather sheet
+    ├── styles.css            # Design tokens first, then base -> components -> views -> motion
     ├── js/                   # ES modules, no build step -- served as-is
-    │   ├── main.js           # Entry point: boot sequence, event wiring, WS message routing
+    │   ├── main.js           # Entry point: boot sequence, router init, event wiring, WS message routing
+    │   ├── router.js         # ~45-line hash router (#/live, #/trends, #/insights) with deep links + last-view persistence
     │   ├── config.js         # Endpoints and tuning constants (gap threshold, trim sizes, refresh rates)
     │   ├── state.js          # Tiny shared state (selected range, night mode)
-    │   ├── prefs.js          # localStorage-backed UI preferences (remembered tab/range selections)
+    │   ├── prefs.js          # localStorage-backed UI preferences (remembered view/tab/range selections)
     │   ├── api.js            # REST fetchers (history, daily summary, generation summary, status, sun, CSV URL)
-    │   ├── ws.js             # WebSocket client with auto-reconnect
-    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, today's typical-day overlay + pace tag, daily bar + cumulative energy + monthly energy (with YoY) charts
+    │   ├── ws.js             # WebSocket client with auto-reconnect + drop/recovery toasts
+    │   ├── charts.js         # Chart.js views (1H/Today/7D/All), gap-breaking, live-point appending, today's typical-day overlay + pace tag, daily bar + cumulative energy + monthly energy (with YoY) charts -- one shared skin
+    │   ├── svg.js            # Dependency-free SVG helpers: icon <use> stamper, sparkline, sun arc geometry
+    │   ├── motion.js         # Number tickers + reduced-motion gate
+    │   ├── tiles.js          # Live stat-tile sparklines (~30 min in-memory window)
+    │   ├── segmented.js      # Sliding indicators for the range toggles (visual only)
+    │   ├── toast.js          # Transient status toasts (connection, exports)
+    │   ├── pullRefresh.js    # Touch-only pull-down-to-refresh on the Live view
     │   ├── insights.js       # Conversion loss / peak / average computations
-    │   ├── sun.js            # Sunrise/sunset strip + countdown ticker
-│   ├── ui.js             # Status pills, night banner, stat cards
-│   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
-│   ├── impact.js           # Savings & Impact panel (money saved + CO2 avoided)
-│   ├── temperature.js      # Temperature panel (stats rows, lens toggle, derating note)
-│   ├── correlation.js        # Weather Impact panel (coverage guard, lens toggle)
-│   ├── weather.js        # Weather chip + popup UI
+    │   ├── sun.js            # Sun path card (SVG arc + "now" marker) + countdown ticker
+    │   ├── ui.js             # Status pills (live/syncing/offline), night banner, ticker-driven stat cards
+    │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
+    │   ├── impact.js         # Savings & Impact panel (money saved + CO2 avoided)
+    │   ├── temperature.js    # Temperature panel (stats rows, lens toggle, derating note)
+    │   ├── correlation.js    # Weather Impact panel (coverage guard, lens toggle)
+    │   ├── weather.js        # Weather chip + popup card / draggable bottom sheet
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
 ```
@@ -96,6 +103,17 @@ solar-dashboard/
 The frontend is plain native ES modules — no bundler, no npm, no build step.
 `main.py` serves everything, so editing any file under `frontend/` takes effect
 on the next browser reload.
+
+### Navigation model
+
+One DOM, three views — **Live** (`#/live`: stat tiles, sun path, Power Over
+Time, inverter status), **Trends** (`#/trends`: generation totals, Daily
+Energy Log, Cumulative, Monthly, Weather Impact) and **Insights**
+(`#/insights`: yield stats, conversion/peak insights, Savings & CO₂,
+temperature). Phones get a fixed bottom tab bar; desktop recomposes the same
+sections into a two-column workspace with a segmented control in the topbar.
+Views deep-link, work with back/forward, and the last view is remembered.
+Inactive views are `display: none`, so hidden charts do zero work.
 
 ## 1. Install dependencies
 
@@ -316,7 +334,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
-| `GET /api/sun` | Next sunrise/sunset times and countdowns |
+| `GET /api/sun` | Next sunrise/sunset times and countdowns, plus today's actual `sunrise`/`sunset` window (used by the Live view's sun-path arc) |
 | `GET /api/weather` | Current weather + a short forecast for the configured location, in a provider-agnostic normalized shape (`provider`, `temp`, `feels_like`, `humidity`, `wind_speed`, `condition`, `icon`, `cloud_cover`, `pop`, `high`/`low`, `forecast[]`). **Primary:** OpenWeatherMap (only when `OPENWEATHER_API_KEY` is set); **fallback:** Open-Meteo — no key required, used automatically whenever OWM is unconfigured or fails. Cached in-memory for 15 minutes. Returns `502 {"detail": ...}` when every provider fails |
 | `WS /ws` | Live reading/status broadcast |
 
