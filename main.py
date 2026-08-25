@@ -32,6 +32,7 @@ import database
 import inverter
 import solar
 import weather
+import weather_history
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +309,20 @@ async def lifespan(app: FastAPI):
     # Daily maintenance (downsampling + retention + weekly VACUUM) runs on its
     # own daemon thread so it can never block the async polling loop.
     database.start_maintenance_thread()
+    # Weather-history backfill gets a startup pass too: the daily maintenance
+    # scheduler would otherwise leave a fresh deploy empty until the next
+    # MAINTENANCE_HOUR slot. The run is idempotent and near-free when nothing
+    # is missing (one small SQL scan, zero HTTP), so firing it per boot is
+    # harmless -- and picks up newly published archive days sooner.
+    if config.WEATHER_HISTORY_ENABLED:
+        async def _startup_weather_backfill():
+            try:
+                summary = await asyncio.to_thread(weather_history.backfill)
+                if summary.get("chunks_requested"):
+                    print(f"[WEATHER HISTORY] startup: {summary}")
+            except Exception as e:
+                print(f"[WEATHER HISTORY] startup backfill failed: {e}")
+        asyncio.create_task(_startup_weather_backfill())
     task = asyncio.create_task(polling_loop())
     try:
         yield

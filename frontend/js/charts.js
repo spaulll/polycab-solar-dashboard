@@ -1512,7 +1512,7 @@ function buildWeatherChart(){
 function rebuildWeather(){
   const payload = latestWeatherCorrelation;
   setWeatherMsg(
-    payload ? (payload.matched_days ? null : 'collecting comparison data…') : ''
+    payload ? (payload.matched_days ? null : 'waiting for archived weather…') : ''
   );
   if(payload && payload.matched_days) buildWeatherChart();
   else if(weatherChart){ weatherChart.destroy(); weatherChart = null; }
