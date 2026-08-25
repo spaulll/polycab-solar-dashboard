@@ -6,6 +6,45 @@
 :root{
   color-scheme: dark;
 
+  /* -----------------------------------------------------------------
+     Instrument v2 design tokens. Additive substrate: existing rules
+     may reference these, but token values themselves are frozen.
+     ----------------------------------------------------------------- */
+
+  /* Space scale — 4px base (--space-1..8) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radii scale (--radius-1..4); --radius kept as the legacy alias */
+  --radius-1: 3px;
+  --radius-2: 4px;
+  --radius-3: 6px;
+  --radius-4: 8px;
+
+  /* Type scale (--font-size-1..6): 11/12/14/17/22/30.
+     Sizes below the scale (9/10px) and clamp()ed display sizes remain
+     literal until later passes migrate them deliberately. */
+  --font-size-1: 11px;
+  --font-size-2: 12px;
+  --font-size-3: 14px;
+  --font-size-4: 17px;
+  --font-size-5: 22px;
+  --font-size-6: 30px;
+
+  /* Motion tokens — transform/opacity-only animations in later layers
+     must use these durations/easings, gated by prefers-reduced-motion. */
+  --dur-fast: 0.15s;
+  --dur-med: 0.25s;
+  --dur-slow: 0.4s;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
   /* Surfaces */
   --bg: #101113;
   --panel: #15171a;
@@ -39,7 +78,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
 
-  --radius: 6px;
+  --radius: var(--radius-3);
 }
 
 /* Light theme — daylight instrument panel on warm paper. Cards sit on a
@@ -83,20 +122,31 @@
   /* Minimal lift so panels separate from the page without Material-style
      elevation; dark keeps none. */
   --shadow-panel: 0 1px 2px rgba(51, 42, 30, 0.07), 0 2px 6px rgba(51, 42, 30, 0.06);
+
+  /* Faint warm tint behind chart plots (dark keeps the bare panel). */
+  --chart-wash: #faf7f2;
 }
 
 *{ box-sizing: border-box; }
 html, body{ margin: 0; padding: 0; }
 
+/* Icon sprite: defined once, painted only through <use> references. */
+.icon-defs{
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 body{
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--font-size-3);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color var(--dur-med) ease, color var(--dur-med) ease;
 }
 
 .wrap{
@@ -113,15 +163,15 @@ body{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding-bottom: 16px;
+  padding-bottom: var(--space-4);
 }
 
 .brand{
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .brand-mark{
@@ -141,7 +191,7 @@ body{
 
 .brand-sub{
   display: block;
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--faint);
   letter-spacing: 0.06em;
 }
@@ -163,9 +213,9 @@ body{
 
 .updated{
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--faint);
-  margin-right: 4px;
+  margin-right: var(--space-1);
   white-space: nowrap;
 }
 
@@ -178,7 +228,7 @@ body{
   border-radius: 999px;
   background: var(--panel);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   color: var(--dim);
   white-space: nowrap;
 }
@@ -260,9 +310,10 @@ body{
   background: var(--panel);
   box-shadow: var(--shadow-panel);
   color: var(--dim);
+  /* 13px is off-scale by design until the type pass migrates it */
   font-size: 13px;
   padding: 10px 14px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .night-banner.show{ display: flex; }
@@ -516,9 +567,9 @@ body{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   min-height: 56px;
   border-bottom: 1px solid var(--line);
 }
@@ -550,7 +601,7 @@ body{
 .tag[hidden]{ display: none; }
 
 .panel-body{
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 /* ==========================================================================
@@ -571,11 +622,11 @@ body{
   border-right: 1px solid var(--line-strong);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   letter-spacing: 0.06em;
   padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast);
 }
 
 .range-toggle button:last-child{ border-right: none; }
@@ -601,14 +652,14 @@ body{
   gap: 7px;
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: var(--font-size-2);
   padding: 6px 12px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
 }
 
 .btn:hover{
@@ -624,13 +675,15 @@ body{
 select{
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   padding: 5px 24px 5px 10px;
   cursor: pointer;
+  /* Data-URI strokes can't read CSS vars; the hex values mirror --dim in
+     each theme (dark #9aa1a9 / light #4d463e) and must move with them. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239aa1a9' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
@@ -655,11 +708,11 @@ select:hover{ color: var(--text); }
 .date-range input[type="date"]{
   appearance: none;
   border: 1px solid var(--line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   background: var(--panel-2);
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
   padding: 5px 8px;
 }
 
@@ -668,7 +721,7 @@ select:hover{ color: var(--text); }
 .date-range .range-dash{
   color: var(--faint);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--font-size-1);
 }
 
 /* ==========================================================================
@@ -685,10 +738,10 @@ select:hover{ color: var(--text); }
   height: 220px;
 }
 
-/* Light mode: faint cool tint defines the chart area against the white
+/* Light mode: faint warm tint defines the chart area against the white
    panel; dark keeps the panel surface. */
-[data-theme="light"] .chart-holder{
-  background: #faf7f2;
+.chart-holder{
+  background: var(--chart-wash, transparent);
 }
 
 .chart-msg{
@@ -840,7 +893,7 @@ select:hover{ color: var(--text); }
 .loss-bar-fill{
   height: 100%;
   background: var(--steel);
-  transition: width 0.4s ease;
+  transition: width var(--dur-slow) ease;
 }
 
 /* Savings & Impact: one primary insight block over the shared meta rows.
@@ -1063,7 +1116,7 @@ footer{
   border-radius: 999px;
   background: var(--panel);
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.25s ease, color 0.25s ease;
+  transition: border-color var(--dur-med) ease, background-color var(--dur-med) ease, color var(--dur-med) ease;
 }
 
 .theme-toggle:hover{ border-color: var(--line-strong); }
@@ -1079,7 +1132,7 @@ footer{
   width: 15px;
   height: 15px;
   color: var(--accent);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity var(--dur-med) ease, transform var(--dur-med) ease;
 }
 
 /* Dark mode shows the moon; light mode shows the sun. The outgoing icon
