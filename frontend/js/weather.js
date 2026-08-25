@@ -105,7 +105,7 @@ function openPopup(){
 function closePopup(){
   overlay.classList.remove('open');
   chip.setAttribute('aria-expanded', 'false');
-  setTimeout(() => { overlay.hidden = true; }, 220); // match CSS fade-out
+  setTimeout(() => { overlay.hidden = true; }, 260); // match CSS fade-out
 }
 
 chip.addEventListener('click', () => {
@@ -119,6 +119,48 @@ overlay.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && !overlay.hidden) closePopup();
 });
+
+// ---------- Bottom sheet drag (touch) ----------
+// The sheet follows the pointer below its rest position; releasing past a
+// threshold dismisses it, otherwise it springs back. The handle is hidden
+// on desktop, so this stays inert there.
+(function initSheetDrag(){
+  const card = overlay.querySelector('.weather-card');
+  const handle = el('weatherDrag');
+  let active = false, startY = 0, dy = 0;
+
+  handle.addEventListener('pointerdown', e => {
+    if(overlay.hidden || !overlay.classList.contains('open')) return;
+    active = true;
+    startY = e.clientY;
+    dy = 0;
+    card.style.transition = 'none';
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if(!active) return;
+    dy = Math.max(0, e.clientY - startY);
+    card.style.transform = `translateY(${dy}px)`;
+    // Fade the sheet slightly as it travels for a physical feel.
+    card.style.opacity = String(Math.max(0.55, 1 - dy / 400));
+  });
+
+  const release = () => {
+    if(!active) return;
+    active = false;
+    card.style.transition = '';
+    card.style.opacity = '';
+    if(dy > 90){
+      card.style.transform = '';
+      closePopup();
+    }else{
+      card.style.transform = '';
+    }
+  };
+  handle.addEventListener('pointerup', release);
+  handle.addEventListener('pointercancel', release);
+})();
 
 export function initWeather(){
   loadWeather();

@@ -25,6 +25,8 @@ import { applyChartTheme } from './charts.js';
 import { VIEWS, initRouter, navigate } from './router.js';
 import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
 import { initSegmented } from './segmented.js';
+import { toast } from './toast.js';
+import { initPullToRefresh } from './pullRefresh.js';
 
 // ---------- View switching ----------
 // The router owns which view is current; this layer applies it to the DOM.
@@ -372,7 +374,21 @@ document.getElementById('pcRange').addEventListener('change', (e) => {
 
 document.getElementById('csvBtn').addEventListener('click', () => {
   window.location.href = csvExportURL(state.range);
+  toast(`CSV export for ${state.range === 'all' ? 'all data' : state.range} downloading`, 'ok');
 });
+
+// ---------- Live pull-to-refresh ----------
+// Same loaders as the wake_up path minus the full panel sweep: the polling
+// intervals keep the rest fresh anyway.
+function refreshLive(){
+  return Promise.allSettled([
+    loadInitialStatus(),
+    loadHistory(),
+    loadDailySummary(),
+    loadGenerationSummary(),
+    loadPowercutCount(),
+  ]);
+}
 
 // ---------- Boot ----------
 (async function init(){
@@ -420,6 +436,8 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   setInterval(refreshSunInfo, SUN_INFO_REFRESH_MS);
   // Weather chip: independent fixed schedule (server caches provider calls).
   initWeather();
+  // Touch-only pull gesture on the Live view.
+  initPullToRefresh(refreshLive);
   }
   finally{
     // First data pass done (or failed honestly): retire the skeletons.

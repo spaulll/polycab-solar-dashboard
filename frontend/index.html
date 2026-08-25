@@ -587,9 +587,12 @@
   </button>
 </nav>
 
-<!-- ================= Weather popup ================= -->
+<!-- ================= Weather popup / bottom sheet ================= -->
 <div class="weather-overlay" id="weatherOverlay" hidden>
   <div class="weather-card" role="dialog" aria-modal="true" aria-label="Weather">
+    <div class="weather-drag" id="weatherDrag" aria-hidden="true">
+      <span class="weather-drag-bar"></span>
+    </div>
     <button class="weather-close" id="weatherClose" aria-label="Close">×</button>
     <div class="weather-card-head">
       <span class="weather-card-icon" id="wcIcon"></span>

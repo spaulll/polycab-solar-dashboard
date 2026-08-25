@@ -1104,15 +1104,15 @@ footer{
 .weather-icon svg{ width: 17px; height: 17px; color: var(--accent); }
 .weather-chip.unavailable .weather-icon svg{ color: var(--faint); }
 
-/* --- Overlay: dim + blur behind the popup card --- */
+/* --- Overlay: dim + blur behind the popup card / bottom sheet --- */
 .weather-overlay{
   position: fixed;
   inset: 0;
   z-index: 100;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: center;
-  padding: 96px 16px 16px;
+  padding: 0;
   background: var(--scrim-overlay);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -1125,20 +1125,61 @@ footer{
 /* Explicit display above would beat [hidden]; restore it. */
 .weather-overlay[hidden]{ display: none; }
 
+/* Phone-first: a draggable bottom sheet. */
 .weather-card{
   position: relative;
-  width: 340px;
-  max-width: 100%;
-  padding: 18px 18px 14px;
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 6px 18px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--panel);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-4) var(--radius-4) 0 0;
   box-shadow: var(--shadow-card);
-  transform: scale(0.96) translateY(-6px);
-  transition: transform 0.2s ease;
+  transform: translateY(100%);
+  transition: transform 0.25s var(--ease-out);
+  touch-action: pan-y;
 }
 
-.weather-overlay.open .weather-card{ transform: scale(1) translateY(0); }
+.weather-overlay.open .weather-card{ transform: translateY(0); }
+
+/* Drag handle (touch affordance; hidden on desktop). */
+.weather-drag{
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 10px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.weather-drag:active{ cursor: grabbing; }
+
+.weather-drag-bar{
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+/* Desktop (>=1020px): centered modal card, as before. */
+@media (min-width: 1020px){
+  .weather-overlay{
+    align-items: flex-start;
+    padding: 96px 16px 16px;
+  }
+
+  .weather-card{
+    width: 340px;
+    max-height: none;
+    border-radius: var(--radius);
+    transform: scale(0.96) translateY(-6px);
+    transition: transform 0.2s ease;
+  }
+
+  .weather-overlay.open .weather-card{ transform: scale(1) translateY(0); }
+
+  .weather-drag{ display: none; }
+}
 
 .weather-close{
   position: absolute;
@@ -1234,6 +1275,82 @@ footer{
   font-size: 10px;
   color: var(--faint);
   text-align: right;
+}
+
+/* ==========================================================================
+    Toasts + pull-to-refresh hint
+   ========================================================================== */
+
+#toasts{
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+/* On phones the tab bar owns the bottom edge; toasts float above it. */
+@media (max-width: 1020px){
+  #toasts{ bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
+}
+
+.toast{
+  pointer-events: auto;
+  max-width: min(92vw, 420px);
+  padding: 9px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+}
+
+.toast.in{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.out{
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.toast.ok{ border-color: var(--ok); }
+.toast.warn{ border-color: var(--err); }
+
+.pull-hint{
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: var(--font-size-1);
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+  pointer-events: none;
+}
+
+.pull-hint.show{ opacity: 1; }
+
+@media (prefers-reduced-motion: reduce){
+  .toast, .pull-hint{ transition: none; }
 }
 
 /* ==========================================================================
