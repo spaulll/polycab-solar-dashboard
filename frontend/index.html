@@ -266,7 +266,10 @@
       <!-- Power over time -->
       <div class="panel">
         <div class="panel-head">
-          <h3 class="panel-title">Power Over Time <span class="tag" id="paceTag" hidden></span></h3>
+          <div class="panel-head-main">
+            <h3 class="panel-title">Power Over Time</h3>
+            <p class="panel-subtitle" id="paceTag" hidden></p>
+          </div>
           <div class="range-toggle" id="rangeToggle">
             <button data-range="1h">1H</button>
             <button data-range="today">Today</button>
@@ -394,7 +397,10 @@
       <!-- Monthly energy (+ year-over-year once history allows) -->
       <div class="panel">
         <div class="panel-head">
-          <h3 class="panel-title">Monthly Energy <span class="tag" id="monthlyYoYTag" hidden></span></h3>
+          <div class="panel-head-main">
+            <h3 class="panel-title">Monthly Energy</h3>
+            <p class="panel-subtitle" id="monthlyYoYTag" hidden></p>
+          </div>
           <div class="range-toggle" id="monthlyRangeToggle">
             <button data-range="12">12M</button>
             <button data-range="24">24M</button>
@@ -410,7 +416,10 @@
       <!-- Weather impact (daily energy vs historical cloud cover) -->
       <div class="panel" id="weatherPanel" hidden>
         <div class="panel-head">
-          <h3 class="panel-title">Weather Impact <span class="tag" id="weatherTag" hidden></span></h3>
+          <div class="panel-head-main">
+            <h3 class="panel-title">Weather Impact</h3>
+            <p class="panel-subtitle" id="weatherTag" hidden></p>
+          </div>
           <div class="range-toggle" id="weatherViewToggle"
                title="Each matched day's yield against that day's mean cloud cover, or the average per cloud class">
             <button data-view="scatter">Days</button>
