@@ -1515,7 +1515,12 @@ footer{
   display: flex;
   gap: 4px;
   padding: 6px;
+  /* Translucent glass: panel tint over a blurred, lightly saturated page.
+     Opaque fallback first for engines without color-mix. */
   background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   /* 3D: top light edge, dark underside, then two drop layers. */
@@ -1562,6 +1567,7 @@ footer{
 .tabbar button:hover{
   color: var(--text);
   background: var(--panel-2);
+  background: color-mix(in srgb, var(--panel-2) 65%, transparent);
 }
 
 /* Active tab reads raised: tinted top face, lit edge, grounded shadow. */
