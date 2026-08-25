@@ -7,3 +7,4 @@ solar_data.db-*
 __pycache__/
 *.pyc
 REDESIGN_PLAN.md
+dev/
