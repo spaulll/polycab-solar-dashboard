@@ -24,6 +24,7 @@ import { initTheme } from './theme.js';
 import { applyChartTheme } from './charts.js';
 import { VIEWS, initRouter, navigate } from './router.js';
 import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
+import { initSegmented } from './segmented.js';
 
 // ---------- View switching ----------
 // The router owns which view is current; this layer applies it to the DOM.
@@ -37,6 +38,9 @@ function setViewActive(view){
     s.classList.toggle('active', s.dataset.view === view));
   document.querySelectorAll('[data-nav]').forEach(b =>
     b.classList.toggle('active', b.dataset.nav === view));
+  // Lets visual widgets (e.g. sliding range indicators) re-measure now
+  // that their containers left display:none.
+  window.dispatchEvent(new CustomEvent('viewchange', { detail: view }));
 }
 
 function applyView(view, prev){
@@ -380,6 +384,8 @@ document.getElementById('csvBtn').addEventListener('click', () => {
       b.addEventListener('click', () => navigate(b.dataset.nav)));
     initRouter(applyView);
     initTiles();
+    // Sliding indicators for every range toggle (visual only).
+    initSegmented();
     // Theme next: charts read the active palette at creation and on change.
     initTheme(applyChartTheme);
   // Saved tab selections next, strictly before any data fetch: the initial
