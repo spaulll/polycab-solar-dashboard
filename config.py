@@ -114,6 +114,12 @@ LONGITUDE: float = _env_float("LONGITUDE", 77.2090)
 # it is used as the primary provider for /api/weather; when missing or empty
 # the dashboard falls back to Open-Meteo, which needs no key at all.
 OPENWEATHER_API_KEY: str = os.environ.get("OPENWEATHER_API_KEY", "").strip()
+# Historical weather backfill (Weather Impact panel): fetches daily
+# cloud/rain/temp/sunshine from the free Open-Meteo Archive API during the
+# nightly maintenance pass and stores one row per day. Set to false to opt
+# out entirely -- no archive requests are made and the panel reports the
+# feature as disabled.
+WEATHER_HISTORY_ENABLED: bool = _env_bool("WEATHER_HISTORY_ENABLED", True)
 
 # --- Savings & impact (money saved + CO2 avoided) ---
 # Flat electricity tariff in currency units per kWh used to estimate money

@@ -84,6 +84,13 @@ function fetchPowercutCount(range){
   return getJSON(`/api/powercuts?range=${range}`).then(json => json.count ?? 0);
 }
 
+// Weather <-> production correlation: cloud-class buckets, matched-day
+// scatter points and a Pearson r from /api/weather/correlation (the
+// maintenance thread backfills the archived weather server-side).
+function fetchWeatherCorrelation(){
+  return getJSON('/api/weather/correlation');
+}
+
 // Normalized weather from the backend (OpenWeatherMap or Open-Meteo).
 function fetchWeather(){
   return getJSON('/api/weather');
@@ -104,6 +111,7 @@ export {
   fetchGenerationSummary,
   fetchGenerationMonthly,
   fetchGenerationStats,
+  fetchWeatherCorrelation,
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,

@@ -40,6 +40,9 @@ const CHART_THEMES = {
     solarRgb: SOLAR_RGB,
     inverterRgb: INVERTER_RGB,
     text: '#9aa1a9',
+    // rgb triplet of `text` above -- lets neutral series join rgba() alpha
+    // blends (weather-impact "cloudy" class) without a new hue.
+    textRgb: '154,161,169',
     grid: 'rgba(233,231,226,0.06)',
     axisTitle: '#5f666e',
     tooltipBg: '#191c20',
@@ -55,6 +58,7 @@ const CHART_THEMES = {
     solarRgb: '176,111,22',
     inverterRgb: '82,112,140',
     text: '#4d463e',
+    textRgb: '77,70,62',
     grid: 'rgba(27,23,19,0.11)',
     axisTitle: '#6f675b',
     tooltipBg: '#fefdfb',
@@ -1339,6 +1343,196 @@ function setTemperatureView(view){
   tempChart.update();
 }
 
+// ---------- Weather Impact (production vs historical cloud cover) ----------
+// Consumes /api/weather/correlation: one point per matched day (daily kWh vs
+// that day's archived mean cloud cover), or per-class averages in the bucket
+// lens. The scatter/buckets toggle rebuilds the single canvas by view
+// (scatter and bar controllers can't share one instance), which also keeps
+// theme flips trivial: every rebuild reads the live theme colors.
+//
+// Class colors come from the existing palette only -- amber accent for
+// "clear" (the sun), the steel series color for "partly", the theme's
+// neutral text tone for "cloudy". No new hue; everything re-themes via
+// applyChartTheme() like every other chart.
+let weatherView = 'scatter';   // 'scatter' (each matched day) | 'buckets' (class averages)
+let latestWeatherCorrelation = null;
+let weatherChart = null;
+
+const weatherMsgEl = el('weatherChartMsg');
+function setWeatherMsg(text){
+  weatherMsgEl.textContent = text || '';
+  weatherMsgEl.classList.toggle('show', !!text);
+}
+
+function weatherClassRgb(key){
+  if(key === 'clear') return solarRgb;
+  if(key === 'partly') return inverterRgb;
+  return themeColors.textRgb;
+}
+
+const WEATHER_CLASSES = [
+  { key: 'clear',  label: 'Clear',  range: '<25%' },
+  { key: 'partly', label: 'Partly', range: '25–60%' },
+  { key: 'cloudy', label: 'Cloudy', range: '>60%' },
+];
+
+function buildWeatherChart(){
+  if(weatherChart){
+    weatherChart.destroy();
+    weatherChart = null;
+  }
+  const tooltip = {
+    backgroundColor: themeColors.tooltipBg,
+    borderColor: themeColors.tooltipBorder,
+    borderWidth: 1,
+    titleColor: themeColors.tooltipTitle,
+    bodyColor: themeColors.tooltipBody,
+    padding: 10,
+  };
+
+  let config;
+  if(weatherView === 'buckets'){
+    const buckets = latestWeatherCorrelation?.classes ?? {};
+    config = {
+      type: 'bar',
+      data: {
+        labels: WEATHER_CLASSES.map(c => c.label),
+        datasets: [{
+          label: 'Average energy',
+          data: WEATHER_CLASSES.map(c => buckets[c.key]?.avg_kwh ?? null),
+          backgroundColor: WEATHER_CLASSES.map(c => rgba(weatherClassRgb(c.key), 0.8)),
+          borderRadius: 3,
+          maxBarThickness: 40,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 150 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltip,
+            callbacks: {
+              title: items => {
+                const c = WEATHER_CLASSES[items[0]?.dataIndex];
+                return c ? `${c.label} days (${c.range} cloud)` : '';
+              },
+              label: item => {
+                const v = item.parsed.y;
+                if(v === null || v === undefined) return '';
+                return ` avg ${fmt(v, 1)} kWh`;
+              },
+              afterBody: items => {
+                const b = buckets[WEATHER_CLASSES[items[0]?.dataIndex]?.key];
+                if(!b || !b.days) return [];
+                return [`over ${b.days} matched day${b.days === 1 ? '' : 's'}`,
+                        `best ${fmt(b.best_day?.kwh, 1)} · worst ${fmt(b.worst_day?.kwh, 1)} kWh`];
+              },
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 0 } },
+          y: { beginAtZero: true, grace: '8%',
+               grid: { color: themeColors.grid, drawTicks: false },
+               title: { display: true, text: 'kWh', color: themeColors.axisTitle, font:{size:10} } },
+        },
+      },
+    };
+  } else {
+    const points = latestWeatherCorrelation?.points ?? [];
+    // Per-point class colors (thresholds applied server-side): translucent
+    // fills over slightly stronger rims.
+    const fills = [], rims = [];
+    for(const p of points){
+      const key = p.cls === 'clear' || p.cls === 'partly' ? p.cls : 'cloudy';
+      fills.push(rgba(weatherClassRgb(key), 0.45));
+      rims.push(rgba(weatherClassRgb(key), 0.85));
+    }
+    config = {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Matched days',
+          data: points.map(p => ({ x: p.cloud, y: p.kwh, date: p.date, rain: p.rain })),
+          pointBackgroundColor: fills,
+          pointBorderColor: rims,
+          pointBorderWidth: 1,
+          pointRadius: 3.2,
+          pointHoverRadius: 5,
+          showLine: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 150 },
+        interaction: { mode: 'nearest', intersect: true },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltip,
+            callbacks: {
+              title: items => items[0]?.raw?.date ?? '',
+              label: item => {
+                const p = item.raw;
+                return ` ${fmt(p.y, 1)} kWh at ${fmt(p.x, 0)}% cloud`;
+              },
+              afterBody: items => {
+                const p = items[0]?.raw;
+                if(!p) return [];
+                return p.rain !== null && p.rain !== undefined
+                  ? [`${fmt(p.rain, 1)} mm rain`]
+                  : [];
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: 'linear', min: 0, max: 100,
+            grid: { color: themeColors.grid, drawTicks: false },
+            ticks: { maxRotation: 0, autoSkipPadding: 20, callback: v => `${v}%` },
+            title: { display: true, text: 'mean cloud cover', color: themeColors.axisTitle, font:{size:10} },
+          },
+          y: {
+            beginAtZero: true, grace: '8%',
+            grid: { color: themeColors.grid, drawTicks: false },
+            title: { display: true, text: 'kWh', color: themeColors.axisTitle, font:{size:10} },
+          },
+        },
+      },
+    };
+  }
+
+  weatherChart = new Chart(el('weatherChart').getContext('2d'), config);
+}
+
+function rebuildWeather(){
+  const payload = latestWeatherCorrelation;
+  setWeatherMsg(
+    payload ? (payload.matched_days ? null : 'collecting comparison data…') : ''
+  );
+  if(payload && payload.matched_days) buildWeatherChart();
+  else if(weatherChart){ weatherChart.destroy(); weatherChart = null; }
+}
+
+function renderWeatherImpact(payload){
+  if(!payload || payload.error) return;
+  latestWeatherCorrelation = payload;
+  if(weatherView !== 'scatter' && weatherView !== 'buckets') weatherView = 'scatter';
+  rebuildWeather();
+}
+
+// Lens toggle using the already-fetched payload -- no refetch.
+function setWeatherView(view){
+  if(view !== 'scatter' && view !== 'buckets') return;
+  weatherView = view;
+  if(!latestWeatherCorrelation) return; // first load renders in this view directly
+  rebuildWeather();
+}
+
 // ---------- Theme switching ----------
 // Re-points every hardcoded canvas color and refreshes the live chart
 // instances without animation so grids/axes/tooltips/legends follow the
@@ -1378,6 +1572,8 @@ function applyChartTheme(themeName){
   if(latestMonthly) rebuildMonthly();
   // Temperature's series colors are embedded at rebuild time as well.
   if(latestTemperature) rebuildTemperature();
+  // Weather's class colors likewise (the chart instance is rebuilt per view).
+  if(latestWeatherCorrelation) rebuildWeather();
 
   for(const chart of [powerChart, dailyChart, cumulativeChart, monthlyChart, tempChart]){
     for(const scale of Object.values(chart.options.scales)){
@@ -1393,4 +1589,5 @@ export {
   renderDailySummary, renderCumulative, setCumulativeRange,
   renderMonthly, setMonthlyRange, applyChartTheme,
   loadTodayProjection, updatePaceTag,
-  renderTemperature, setTemperatureView };
+  renderTemperature, setTemperatureView,
+  renderWeatherImpact, setWeatherView };

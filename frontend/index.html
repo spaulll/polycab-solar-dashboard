@@ -255,6 +255,22 @@
         </div>
       </div>
 
+      <!-- Weather impact (daily energy vs historical cloud cover) -->
+      <div class="panel" id="weatherPanel" hidden>
+        <div class="panel-head">
+          <h3 class="panel-title">Weather Impact <span class="tag" id="weatherTag" hidden></span></h3>
+          <div class="range-toggle" id="weatherViewToggle"
+               title="Each matched day's yield against that day's mean cloud cover, or the average per cloud class">
+            <button data-view="scatter">Days</button>
+            <button data-view="buckets">Average</button>
+          </div>
+        </div>
+        <div class="chart-holder small">
+          <canvas id="weatherChart"></canvas>
+          <div class="chart-msg" id="weatherChartMsg"></div>
+        </div>
+      </div>
+
     </section>
 
     <aside class="col-side">

@@ -16,6 +16,7 @@ import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDa
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
 import { loadTemperature, updateCurrentTemp, initTemperature } from './temperature.js';
+import { loadWeatherImpact, initWeatherImpact } from './correlation.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
 import { initWeather } from './weather.js';
@@ -46,6 +47,7 @@ function startDayPolling(){
   dayTimers.push(setInterval(loadYieldStats, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadMonthlyEnergy, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadTemperature, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadWeatherImpact, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -243,6 +245,7 @@ function handleWSMessage(msg){
     loadYieldStats();
     loadMonthlyEnergy();
     loadTemperature();
+    loadWeatherImpact();
     loadPowercutCount();
     startDayPolling();
   }
@@ -359,6 +362,9 @@ document.getElementById('csvBtn').addEventListener('click', () => {
   // renders straight into the remembered view.
   initTemperature();
   await loadTemperature();
+  // Weather Impact panel: same pattern -- saved lens first, then fetch.
+  initWeatherImpact();
+  await loadWeatherImpact();
   await loadPowercutCount();
   connectWebSocket(handleWSMessage);
   // Daily summary + powercuts intervals follow day/night (see

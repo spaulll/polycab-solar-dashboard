@@ -548,6 +548,27 @@ async def api_generation_monthly(
     return await asyncio.to_thread(database.get_generation_monthly, months)
 
 
+@app.get("/api/weather/correlation")
+async def api_weather_correlation():
+    """
+    Weather <-> production correlation for the Weather Impact panel: daily
+    energy (the exact same day series as the KPI strip / Daily Energy Log)
+    joined against the archived Open-Meteo weather days that the maintenance
+    thread's backfill job stores in readings_weather_daily.
+
+    Returns clear/partly/cloudy class buckets by mean cloud cover
+    (clear <25%, partly 25-60%, cloudy >60%) with avg/best/worst per bucket,
+    the raw matched-day scatter points [{date, kwh, cloud, rain}], a Pearson
+    r between cloud cover and energy, and coverage fields (matched_days vs
+    total_generation_days) so the UI can degrade honestly while the backfill
+    is young. `enabled` mirrors WEATHER_HISTORY_ENABLED so the UI can hide
+    the feature when the archive fetch is opted out.
+    """
+    payload = await asyncio.to_thread(database.get_weather_correlation)
+    payload["enabled"] = config.WEATHER_HISTORY_ENABLED
+    return payload
+
+
 @app.get("/api/db-status")
 async def api_db_status():
     """Database health: file size, row counts, last maintenance, retention."""

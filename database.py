@@ -86,6 +86,21 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT
 );
 
+-- Historical daily weather (Open-Meteo Archive API), one row per LOCAL day,
+-- written by the maintenance thread's backfill job. Joined against the
+-- generation day series for the Weather Impact correlation view. Days are
+-- only ever inserted complete -- never estimated or partially filled --
+-- so absent rows mean "archive didn't have that day (yet)" and are retried
+-- on a later maintenance run.
+CREATE TABLE IF NOT EXISTS readings_weather_daily (
+    day               TEXT PRIMARY KEY,   -- YYYY-MM-DD (local calendar day)
+    cloud_cover_mean  REAL,               -- %  (daily mean of hourly values)
+    precip_mm         REAL,               -- mm (precipitation_sum)
+    temp_mean         REAL,               -- °C (temperature_2m_mean)
+    sunshine_fraction REAL,               -- sunshine_duration ÷ astral daylight span
+    fetched_at        TEXT                -- ISO 8601 UTC, when the row was stored
+);
+
 -- Powercut events: one row per inverter-unreachable episode. The row is
 -- inserted when the first error follows a successful reading and updated
 -- (ended_at + duration) when a reading succeeds again. An open row
@@ -410,6 +425,22 @@ def run_maintenance() -> dict:
             _set_meta(conn, "last_vacuum", started)
             vacuumed = True
 
+        # --- d. Historical weather backfill -------------------------------
+        # Runs on the same daily cadence (and at startup catch-up): fills
+        # every missing day from the DB's first generation day through what
+        # the archive API has published, one HTTP call per chunk of missing
+        # days. Failures are logged and simply retried on the next pass --
+        # only complete days are ever stored, never estimates.
+        weather_summary = None
+        if config.WEATHER_HISTORY_ENABLED:
+            try:
+                # Deferred import: weather_history calls back into this
+                # module for all SQL, so a top-level import would cycle.
+                import weather_history
+                weather_summary = weather_history.backfill()
+            except Exception as e:
+                print(f"[MAINTENANCE] weather backfill failed: {e}")
+
         summary = {
             "ran_at": started,
             "cutoff": cutoff,
@@ -418,6 +449,8 @@ def run_maintenance() -> dict:
             "raw_deleted": deleted_rows,
             "vacuumed": vacuumed,
         }
+        if weather_summary is not None:
+            summary["weather"] = weather_summary
         print(f"[MAINTENANCE] {summary}")
         return summary
     except Exception as e:
@@ -842,6 +875,238 @@ def get_temperature_records(today_since: Optional[str] = None) -> dict:
         "hottest_day": (
             {"date": hottest[1], "temp_max": hottest[0]} if hottest else None
         ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Historical daily weather (backfill storage + correlation)
+# ---------------------------------------------------------------------------
+def get_first_generation_day() -> Optional[str]:
+    """
+    Earliest local day (YYYY-MM-DD) with any generation data, across BOTH the
+    permanent daily aggregates and the raw table -- the start of the span the
+    weather backfill must cover. None when the database is empty.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT MIN(day) AS first FROM (
+                SELECT MIN(day) AS day FROM readings_daily
+                UNION ALL
+                SELECT date(MIN(timestamp)) FROM readings
+            )
+            """
+        ).fetchone()
+        return row["first"] if row else None
+    finally:
+        conn.close()
+
+
+def get_weather_days() -> list[str]:
+    """Every day (YYYY-MM-DD) already present in readings_weather_daily."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT day FROM readings_weather_daily ORDER BY day ASC"
+        ).fetchall()
+        return [r["day"] for r in rows]
+    finally:
+        conn.close()
+
+
+def upsert_weather_daily(rows: list[dict]) -> int:
+    """
+    Insert/replace complete weather day rows. Callers only produce rows for
+    days whose source data was complete; this function does no filtering.
+    Returns the number of rows handed to SQLite.
+    """
+    if not rows:
+        return 0
+    conn = _connect()
+    try:
+        conn.executemany(
+            """
+            INSERT OR REPLACE INTO readings_weather_daily
+                (day, cloud_cover_mean, precip_mm, temp_mean,
+                 sunshine_fraction, fetched_at)
+            VALUES (:day, :cloud_cover_mean, :precip_mm, :temp_mean,
+                    :sunshine_fraction, :fetched_at)
+            """,
+            rows,
+        )
+        conn.commit()
+        return len(rows)
+    finally:
+        conn.close()
+
+
+WEATHER_BACKFILL_META_KEY = "weather_backfilled_through"
+
+
+def get_weather_backfill_state() -> dict:
+    """Backfill progress marker + stored-day count, for logging/db-status."""
+    conn = _connect()
+    try:
+        through = _get_meta(conn, WEATHER_BACKFILL_META_KEY)
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM readings_weather_daily"
+        ).fetchone()["n"]
+        last_day = conn.execute(
+            "SELECT MAX(day) AS d FROM readings_weather_daily"
+        ).fetchone()["d"]
+    finally:
+        conn.close()
+    return {
+        "backfilled_through": through,
+        "last_stored_day": last_day,
+        "days": int(count or 0),
+    }
+
+
+def set_weather_backfilled_through(day: str) -> None:
+    """Advance the `weather_backfilled_through` meta marker (never backwards)."""
+    conn = _connect()
+    try:
+        current = _get_meta(conn, WEATHER_BACKFILL_META_KEY)
+        if current is None or (day and day > current):
+            _set_meta(conn, WEATHER_BACKFILL_META_KEY, day)
+            conn.commit()
+    finally:
+        conn.close()
+
+
+# Cloud-cover class boundaries (% mean cloud cover) for the Weather Impact
+# buckets: clear < 25, partly 25–60, cloudy > 60.
+WEATHER_CLASS_THRESHOLDS = (25.0, 60.0)
+
+
+def get_weather_correlation() -> dict:
+    """
+    Weather <-> production correlation for the Weather Impact panel.
+
+    Joins the generation day series (the EXACT same merge used everywhere
+    else -- readings_daily.energy_kwh plus still-raw recent days grouped on
+    the fly as MAX(e_today)) against readings_weather_daily, so every matched
+    point is a real day with both measured energy and archived weather.
+
+    Output:
+      classes   clear/partly/cloudy buckets by mean cloud cover (thresholds
+                above): {days, avg_kwh, best_day{date,kwh}, worst_day} --
+                nulls when a bucket has no days yet (no fabricated zeros)
+      points    [{date, kwh, cloud, rain}] ascending by date (scatter feed)
+      pearson_r Pearson correlation between cloud_cover_mean and energy_kwh
+                across matched days; null below 2 points or zero variance
+      matched_days / total_generation_days  coverage note for the UI guard
+      backfilled_through                   archive progress marker
+
+    Pure reads -- the backfill job writes the weather table, never this.
+    """
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT w.day,
+                   w.cloud_cover_mean,
+                   w.precip_mm,
+                   g.energy_kwh
+            FROM readings_weather_daily w
+            JOIN (
+                SELECT day, energy_kwh FROM readings_daily
+                WHERE energy_kwh IS NOT NULL
+                UNION ALL
+                SELECT date(timestamp) AS day,
+                       MAX(e_today) AS energy_kwh
+                FROM readings
+                WHERE date(timestamp) NOT IN (SELECT day FROM readings_daily)
+                  AND e_today IS NOT NULL
+                GROUP BY date(timestamp)
+            ) g ON g.day = w.day
+            WHERE w.cloud_cover_mean IS NOT NULL AND g.energy_kwh IS NOT NULL
+            ORDER BY w.day ASC
+            """
+        ).fetchall()
+
+        total_generation_days = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM (
+                SELECT day FROM readings_daily WHERE energy_kwh IS NOT NULL
+                UNION ALL
+                SELECT date(timestamp)
+                FROM readings
+                WHERE date(timestamp) NOT IN (SELECT day FROM readings_daily)
+                  AND e_today IS NOT NULL
+                GROUP BY date(timestamp)
+            )
+            """
+        ).fetchone()["n"]
+
+        through = _get_meta(conn, WEATHER_BACKFILL_META_KEY)
+    finally:
+        conn.close()
+
+    lo, mid = WEATHER_CLASS_THRESHOLDS
+
+    def _classify(cloud: float) -> str:
+        if cloud < lo:
+            return "clear"
+        if cloud <= mid:
+            return "partly"
+        return "cloudy"
+
+    buckets: dict = {
+        "clear": [], "partly": [], "cloudy": []
+    }
+    points = []
+    for r in rows:
+        kwh = float(r["energy_kwh"])
+        cloud = float(r["cloud_cover_mean"])
+        rain = float(r["precip_mm"]) if r["precip_mm"] is not None else None
+        cls = _classify(cloud)
+        buckets[cls].append((r["day"], kwh))
+        points.append({
+            "date": r["day"],
+            "kwh": round(kwh, 2),
+            "cloud": round(cloud, 1),
+            "rain": round(rain, 2) if rain is not None else None,
+            # Class stamped server-side so the UI never re-derives thresholds.
+            "cls": cls,
+        })
+
+    def _bucket(days_list):
+        if not days_list:
+            return {"days": 0, "avg_kwh": None, "best_day": None, "worst_day": None}
+        kwhs = [k for _, k in days_list]
+        best = max(days_list, key=lambda p: p[1])
+        worst = min(days_list, key=lambda p: p[1])
+        return {
+            "days": len(days_list),
+            "avg_kwh": round(sum(kwhs) / len(kwhs), 2),
+            "best_day": {"date": best[0], "kwh": round(best[1], 2)},
+            "worst_day": {"date": worst[0], "kwh": round(worst[1], 2)},
+        }
+
+    # Pearson r between cloud cover and energy over all matched days.
+    pearson_r = None
+    n = len(points)
+    if n >= 2:
+        xs = [p["cloud"] for p in points]
+        ys = [p["kwh"] for p in points]
+        mx = sum(xs) / n
+        my = sum(ys) / n
+        cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+        vx = sum((x - mx) ** 2 for x in xs)
+        vy = sum((y - my) ** 2 for y in ys)
+        if vx > 0 and vy > 0:
+            pearson_r = round(cov / ((vx ** 0.5) * (vy ** 0.5)), 3)
+
+    return {
+        "classes": {name: _bucket(b) for name, b in buckets.items()},
+        "points": points,
+        "pearson_r": pearson_r,
+        "matched_days": n,
+        "total_generation_days": int(total_generation_days or 0),
+        "backfilled_through": through,
     }
 
 
@@ -1422,7 +1687,8 @@ def get_db_status() -> dict:
     conn = _connect()
     try:
         counts = {}
-        for table in ("readings", "readings_hourly", "readings_daily"):
+        for table in ("readings", "readings_hourly", "readings_daily",
+                      "readings_weather_daily"):
             counts[table] = conn.execute(
                 f"SELECT COUNT(*) AS n FROM {table}"
             ).fetchone()["n"]

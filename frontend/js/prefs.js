@@ -5,6 +5,8 @@
 //   polycab.dashboard.powerRange       Power Over Time range
 //   polycab.dashboard.cumulativeRange  Cumulative Energy range
 //   polycab.dashboard.monthlyRange     Monthly Energy range
+//   polycab.dashboard.temperatureView  Temperature panel lens
+//   polycab.dashboard.weatherView      Weather Impact panel lens
 //   polycab.dashboard.powercutsRange   Powercuts counter window
 //
 // Reads are validated against the caller's allowed values and fall back

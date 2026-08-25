@@ -66,6 +66,7 @@ solar-dashboard/
 ├── inverter.py             # Modbus polling + astral sunrise/sunset night-mode logic
 ├── database.py              # SQLite schema, background-thread writer, history/summary/CSV queries
 ├── weather.py               # Weather for the top-bar chip (OpenWeatherMap + Open-Meteo fallback, cached)
+├── weather_history.py         # Daily historical weather backfill (Open-Meteo Archive API -> SQLite)
 ├── config.py                # All editable settings (loaded from .env / env vars, see below)
 ├── .env.example               # Template for your real config -- copy to .env and fill in
 ├── requirements.txt
@@ -86,6 +87,7 @@ solar-dashboard/
 │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
 │   ├── impact.js           # Savings & Impact panel (money saved + CO2 avoided)
 │   ├── temperature.js      # Temperature panel (stats rows, lens toggle, derating note)
+│   ├── correlation.js        # Weather Impact panel (coverage guard, lens toggle)
 │   ├── weather.js        # Weather chip + popup UI
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
@@ -125,6 +127,15 @@ figure. Setting `ELECTRICITY_TARIFF=0` hides the panel entirely.
 `OPENWEATHER_API_KEY` is optional: when set, OpenWeatherMap is used as the
 primary weather provider for the top bar; when missing or empty, the
 dashboard automatically uses **Open-Meteo**, which requires no key at all.
+
+The **Weather Impact** panel is fed by `WEATHER_HISTORY_ENABLED` (default
+`true`): during each nightly maintenance run the dashboard fetches daily
+cloud/rain/temperature/sunshine history from Open-Meteo's free **Archive API**
+for your configured location and stores one row per day in SQLite. Set it to
+`false` to opt out — no archive requests are made and the panel hides itself.
+The archive lags real time by a couple of days, so the most recent days join
+the comparison only after later backfills reach them; days are stored only
+when complete, never estimated.
 
 `.env` is gitignored and never committed -- keep your real inverter IP and
 home coordinates out of version control. `config.py` itself only contains
@@ -258,6 +269,24 @@ directory (path controlled by `DB_PATH`). The schema is created via
   server-side in SQLite (`/api/insights/temperature`, cached 15 min); the
   panel refreshes on the Daily Energy Log cadence and after night mode ends.
 
+- **Weather Impact panel**: the last workspace panel (below Monthly Energy),
+  quantifying what clouds actually cost this specific install. Daily energy
+  is joined against archived daily weather (mean cloud cover, rain) that the
+  maintenance thread backfills from Open-Meteo's Archive API into
+  `readings_weather_daily` — every matched point is a real day with both
+  measured generation and recorded weather. A tag in the panel head carries
+  the headline (`Clear 12.1 · Cloudy 6.6 kWh (−45%)`: clear-day vs cloudy-day
+  averages), with the per-class detail, matched-days coverage, Pearson r and
+  archive-lag note in its tooltip. The chart has two lenses: **Days** plots
+  each matched day as a scatter point (x = mean cloud %, y = kWh; class
+  colors amber/steel/neutral for clear/partly/cloudy — existing palette
+  only, re-themed on toggle), **Average** shows the per-class average bars.
+  Below 14 matched days a muted `collecting comparison data…` note replaces
+  percentages; with zero matches the chart shows the same note instead of an
+  empty plot; `WEATHER_HISTORY_ENABLED=false` hides the panel entirely. The
+  endpoint is `/api/weather/correlation`; refreshes on the Daily Energy Log
+  cadence and immediately after night mode ends.
+
 - **Weather chip** (`weather.py` + `frontend/js/weather.js`): a small
   icon+temperature chip in the top bar — no permanent weather card. Clicking
   it opens a popup (with a dimmed, backdrop-blurred background; click the
@@ -283,6 +312,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
 | `GET /api/generation/monthly?months=N` | Monthly energy totals in kWh (`{month: "YYYY-MM", kwh, days_with_data}`, ascending), bucketed server-side from the exact same day series as the Daily Energy Log / KPI strip — a month's total always equals the sum of that month's daily bars. Also returns `first_month` (earliest month with data across all history) and `yoy_available` (true once a same-month-last-year pair exists, i.e. ≥ 13 months of history). `months` selects the most recent N months to return (default 24); `days_with_data` lets gap months be annotated instead of silently averaged. Backs the Monthly Energy chart |
 | `GET /api/insights/temperature?bin_minutes=M` | Inverter temperature analytics over **daylight readings only** (same sun-window join as the solar profile; night residuals never count). Returns `by_time_of_day` (avg/max internal temperature vs seconds-after-sunrise bins), `by_output` (readings banded by DC solar input in 100 W bands with avg/max temperature, avg AC power and the energy-weighted DC→AC efficiency `SUM(P_ac)/SUM(P_dc)` per band — reveals derating at high output + heat) and `records` (today's max from the sunrise cutoff, all-time max and hottest day `{date, temp_max}` spanning all history via permanent daily aggregates). Implausible samples (< −20 °C or > 110 °C, e.g. a stuck sensor) are filtered defensively. The time-of-day profile covers the raw retention window only; cached in-process per bin size for 15 minutes. Backs the sidebar Temperature panel |
+| `GET /api/weather/correlation` | Weather ↔ production correlation for the Weather Impact panel. Joins the same day series as the KPI strip against `readings_weather_daily` (archived Open-Meteo days backfilled by the maintenance thread). Returns `classes` (`clear`/`partly`/`cloudy` by mean cloud cover — <25%, 25–60%, >60% — each with `days`, `avg_kwh`, `best_day`, `worst_day`; nulls when a bucket is empty), `points` (`[{date, kwh, cloud, rain, cls}]`, ascending), `pearson_r` (null below 2 matched days or zero variance), `matched_days`/`total_generation_days` coverage fields and `backfilled_through`. `enabled: false` when `WEATHER_HISTORY_ENABLED` opts the feature out |
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
