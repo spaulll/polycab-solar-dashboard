@@ -509,8 +509,8 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 }
 
 /* Every card shares one value block: label at top, value pinned to a
-   common bottom baseline (not centered) so the narrower Grid V/A line and
-   any placeholder sit on exactly the same line as the large values. */
+   common bottom baseline (not centered) so every reading sits on exactly
+   the same line at the same unified size. */
 .stat-value{
   margin: auto 0 0;
   padding-top: 8px;
@@ -524,10 +524,18 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Grid V/A: both metrics on ONE line, sized to fit the narrowest card
-   without wrapping or clipping. Same structure as every other card. */
-.stat-value.combo{
-  font-size: clamp(14px, 1.35vw, 18px);
+/* Grid V/A: both metrics on ONE line at the SAME unified value size as
+   every other card (the old smaller combo size is gone). The pill-shaped
+   unit chips would overflow the narrow middle card at that size, so here
+   V/A render as plain compact suffixes; the slash splits the readings.
+   Only the glyphs change -- the card box is untouched. */
+.stat-value.combo .unit{
+  border: none;
+  padding: 0;
+  margin-left: 2px;
+  /* Raise the bare letters to the digits' mid-height so they read as
+     units, not subscripts. */
+  vertical-align: 0.45em;
 }
 
 /* Unit chips: the metric's unit as a small quiet chip beside the number. */
@@ -545,6 +553,9 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 
 .stat-value .sep{
   color: var(--faint);
+  /* HTML whitespace was removed around the slash; margins keep the two
+     readings apart without spending full mono space characters. */
+  margin: 0 0.09em;
 }
 
 .stat-card.dim .stat-value{ color: var(--faint); transition: color 0.6s; }
@@ -1666,10 +1677,9 @@ footer{
 }
 
 /* Small phones (320–360px): trim card padding a touch more so the longest
-   labels and combo Grid V/A reading never clip. */
+   labels and the unified-size Grid V/A reading never clip. */
 @media (max-width: 360px){
   .stat-card{ padding: 11px 12px; }
   .stat-value{ font-size: 18px; }
-  .stat-value.combo{ font-size: 13px; }
   .gen-card{ padding: 11px 12px; }
 }
