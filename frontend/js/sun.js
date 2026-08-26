@@ -22,8 +22,15 @@ const card = el('sunArcCard');
 // night (sunset -> back to sunrise along the same path). The arc spans
 // nearly the full card width; the countdown/times text overlaps its lower
 // interior via negative margins (see styles.css).
-const W = 240, H = 132;
-const CX = 120, CY = 124, R = 112;
+//
+// The canvas cushions the arc by 44 units on every side so the pulsing
+// "now" halo (r 17, scaled to 21.25 at peak) never clips the viewBox --
+// not at the apex, not at the endpoints. That leaves ~22.75 clear units
+// around the halo at full pulse on all four sides. styles.css widens
+// .sun-arc-plot by the same 1.3x (275 -> 357.5px) so the rendered arc
+// keeps its original pixel size, and re-tunes the overlap margins.
+const W = 312, H = 200;
+const CX = 156, CY = 156, R = 112;
 
 let sunTargetSunrise = null; // Date — next sunrise
 let sunTargetSunset = null;  // Date — next sunset

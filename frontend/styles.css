@@ -317,12 +317,19 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   margin-bottom: 0;
 }
 
+/* ViewBox grew 1.3x (240x132 -> 312x200) to cushion the pulsing halo; the
+   cap grows by the same factor so the arc keeps its original pixel size.
+   The extra 32 top viewBox-units would push the dial down the card, and
+   the taller canvas would push the text block down with it -- the negative
+   margins here (plot) and on .sun-arc-countdown below return both to their
+   original positions, so only the previously-clipped glow gains room. */
 .sun-arc-plot{
-  width: min(100%, 275px);
+  width: min(100%, 357.5px);
+  margin-top: -36.67px; /* 32 units x 1.14583 px/unit at the 357.5px cap */
   color: var(--accent);
 }
 
-.sun-arc-plot svg{ display: block; width: 100%; height: auto; }
+.sun-arc-plot svg{ display: block; width: 100%; height: auto; pointer-events: none; }
 
 .sun-arc-card.night .sun-arc-plot{ color: var(--night); }
 
@@ -344,7 +351,10 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   .sun-halo{ animation: none; }
 }
 
-/* Countdown: the card's hero figure, sitting INSIDE the arch. */
+/* Countdown: the card's hero figure, sitting INSIDE the arch. The margin
+   seats the text block at its pre-expansion offset from the arc baseline:
+   the canvas now extends 91 viewBox-units below that anchor line, so the
+   pull-up grows accordingly (desktop cap 357.5px / narrow cap 325px). */
 .sun-arc-countdown{
   display: flex;
   flex-direction: column;
@@ -352,7 +362,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   gap: 1px;
   text-align: center;
   min-width: 0;
-  margin-top: -63px;
+  margin-top: -104.25px;
 }
 
 .sun-countdown-value{
@@ -1658,7 +1668,8 @@ footer{
   .topbar-actions{ margin-left: auto; }
 
   /* --- Sun path card: dial scales with the narrow viewport --- */
-  .sun-arc-plot{ width: min(100%, 250px); }
+  .sun-arc-plot{ width: min(100%, 325px); margin-top: -33.33px; }
+  .sun-arc-countdown{ margin-top: -100.5px; }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
          longest realistic readings on one line at 320px --- */
