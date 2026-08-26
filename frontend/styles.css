@@ -758,6 +758,18 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   visibility: hidden;
 }
 
+/* Tiny weather glyphs inside compact subtitles (Weather Impact tag):
+   inherit the subtitle color, sit on the text's optical mid-line. The var
+   pierces the <use> shadow tree to thicken the 1.4px heritage stroke at
+   this small render size; the gap after each glyph reads as one space. */
+.panel-subtitle .tag-ico{
+  --wi-sw: 2.2;
+  width: 11px;
+  height: 11px;
+  vertical-align: -1.5px;
+  margin-right: 6px;
+}
+
 .tag{
   display: inline-block;
   vertical-align: 1px;
@@ -1623,10 +1635,6 @@ footer{
   .tabbar button,
   .tabbar button.active{ transition: none; transform: none; }
 }
-
-/* Trends keeps its chart stack full width (no side column). */
-.layout.single{ grid-template-columns: minmax(0, 1fr); }
-.layout.single .col-main{ grid-template-columns: minmax(0, 1fr); }
 
 /* ==========================================================================
    Responsive — desktop first, still usable on phone

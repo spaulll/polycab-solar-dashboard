@@ -532,10 +532,11 @@ function cumulativeTypicalWs(limitSec){
 // W·s -> kWh (J/3600 = Wh, /1000 = kWh).
 const WS_TO_KWH = 1 / 3600000;
 
-// Pace tag in the panel head: "On pace for X kWh · typical Y". Recomputed
-// from the fetched curve on every live reading (`eTodayKwh`), falling back
-// to the payload's own current_kwh otherwise. Hides itself whenever the
-// view, time of day or history doesn't support an honest statement.
+// Pace tag in the panel head: "PACE X · TYP Y KWH". Kept terse on purpose
+// (the tooltip carries the full sentence). Recomputed from the fetched curve
+// on every live reading (`eTodayKwh`), falling back to the payload's own
+// current_kwh otherwise. Hides itself whenever the view, time of day or
+// history doesn't support an honest statement.
 function updatePaceTag(eTodayKwh){
   const tag = el('paceTag');
   const hide = () => { tag.hidden = true; };
@@ -558,7 +559,7 @@ function updatePaceTag(eTodayKwh){
   if(offSec >= spanSec){
     // Sunset passed: freeze at the actual final vs the typical day.
     tag.hidden = false;
-    tag.textContent = `Finished at ${fmt(kwh, 1)} kWh · typical ${typical}`;
+    tag.textContent = `Final ${fmt(kwh, 1)} · typ ${typical} kWh`;
     tag.title =
       "How today actually finished against your long-term average day.";
     return;
@@ -569,7 +570,7 @@ function updatePaceTag(eTodayKwh){
   const remainingKwh =
     (cumulativeTypicalWs(Infinity) - cumulativeTypicalWs(offSec)) * WS_TO_KWH;
   tag.hidden = false;
-  tag.textContent = `On pace for ${fmt(kwh + remainingKwh, 1)} kWh · typical ${typical}`;
+  tag.textContent = `Pace ${fmt(kwh + remainingKwh, 1)} · typ ${typical} kWh`;
   tag.title =
     'Projected final yield if the rest of the day follows your long-term ' +
     'average day. Compared to your long-term average day — a power cut ' +

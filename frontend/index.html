@@ -104,7 +104,7 @@
     </symbol>
 
     <symbol id="wi-sun" viewBox="0 0 24 24">
-      <g fill="currentColor" stroke="currentColor" stroke-width="1.4">
+      <g fill="currentColor" stroke="currentColor" style="stroke-width:var(--wi-sw,1.4)">
         <circle cx="12" cy="12" r="4.4" fill="none"/>
         <g stroke-linecap="round"><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.8 1.8M17.2 17.2 19 19M5 19l1.8-1.8M17.2 6.8 19 5"/></g>
       </g>
@@ -117,7 +117,7 @@
       </g>
     </symbol>
     <symbol id="wi-cloudy" viewBox="0 0 24 24">
-      <g fill="currentColor" stroke="currentColor" stroke-width="1.4">
+      <g fill="currentColor" stroke="currentColor" style="stroke-width:var(--wi-sw,1.4)">
         <path d="M6.5 18a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.7-1.4A4.3 4.3 0 0 1 16.5 18z" fill="none"/>
       </g>
     </symbol>
@@ -361,7 +361,8 @@
     </article>
   </section>
 
-  <div class="layout single">
+  <!-- Workspace: dense history charts left (wide), curve + weather right -->
+  <div class="layout">
     <section class="col-main">
 
       <!-- Daily energy log -->
@@ -376,22 +377,6 @@
         <div class="chart-holder small">
           <canvas id="dailyChart"></canvas>
           <div class="chart-msg" id="dailyChartMsg"></div>
-        </div>
-      </div>
-
-      <!-- Cumulative energy curve -->
-      <div class="panel">
-        <div class="panel-head">
-          <h3 class="panel-title">Cumulative Energy</h3>
-          <div class="range-toggle" id="cumRangeToggle">
-            <button data-range="30d">30D</button>
-            <button data-range="90d">90D</button>
-            <button data-range="all">All</button>
-          </div>
-        </div>
-        <div class="chart-holder small">
-          <canvas id="cumulativeChart"></canvas>
-          <div class="chart-msg" id="cumulativeChartMsg"></div>
         </div>
       </div>
 
@@ -414,6 +399,26 @@
         </div>
       </div>
 
+    </section>
+
+    <aside class="col-side">
+
+      <!-- Cumulative energy curve -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">Cumulative Energy</h3>
+          <div class="range-toggle" id="cumRangeToggle">
+            <button data-range="30d">30D</button>
+            <button data-range="90d">90D</button>
+            <button data-range="all">All</button>
+          </div>
+        </div>
+        <div class="chart-holder small">
+          <canvas id="cumulativeChart"></canvas>
+          <div class="chart-msg" id="cumulativeChartMsg"></div>
+        </div>
+      </div>
+
       <!-- Weather impact (daily energy vs historical cloud cover) -->
       <div class="panel" id="weatherPanel" hidden>
         <div class="panel-head">
@@ -433,7 +438,7 @@
         </div>
       </div>
 
-    </section>
+    </aside>
   </div>
 
   </section>

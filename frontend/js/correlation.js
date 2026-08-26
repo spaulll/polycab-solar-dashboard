@@ -42,8 +42,13 @@ function renderTag(payload){
   const pct = Math.round((1 - cloudy.avg_kwh / clear.avg_kwh) * 100);
   const sign = pct >= 0 ? '−' : '+';
   tag.hidden = false;
-  tag.textContent =
-    `Clear ${fmt(clear.avg_kwh, 1)} · Cloudy ${fmt(cloudy.avg_kwh, 1)} kWh (${sign}${Math.abs(pct)}%)`;
+  // Most compact tag that still reads at a glance: weather glyphs stand in
+  // for the Clear/Cloudy words (the buckets below carry the names and the
+  // tooltip spells the rest out), one shared kWh, bare delta.
+  tag.innerHTML =
+    `<svg class="tag-ico" aria-hidden="true"><use href="#wi-sun"/></svg>${fmt(clear.avg_kwh, 1)}` +
+    ` · <svg class="tag-ico" aria-hidden="true"><use href="#wi-cloudy"/></svg>${fmt(cloudy.avg_kwh, 1)} kWh` +
+    ` ${sign}${Math.abs(pct)}%`;
   tag.title =
     `Average yield on clear days (<25% cloud, ${clear.days} days) vs ` +
     `cloudy days (>60%, ${cloudy.days} days). ` +
