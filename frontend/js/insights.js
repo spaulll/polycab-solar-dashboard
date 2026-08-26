@@ -4,12 +4,10 @@
 // reading) with its original record timestamp (see renderPeakInsight).
 
 import { fmt } from './format.js';
-import { state } from './state.js';
 
 const el = id => document.getElementById(id);
 
 function computeInsights(readings){
-  el('insightsRangeTag').textContent = state.range.toUpperCase();
   if(!readings || readings.length === 0){
     el('insightLoss').textContent = '–%';
     el('lossBar').style.width = '0%';

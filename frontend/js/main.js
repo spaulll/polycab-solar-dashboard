@@ -321,7 +321,10 @@ function setToggleActive(toggleId, value){
 function restorePersistedRanges(){
   const power = loadPref('powerRange', toggleOptions('rangeToggle'), state.range);
   setRange(power);
+  // The Live chart and the Insights panel share one range (and one pref);
+  // both segmented controls always mirror it.
   setToggleActive('rangeToggle', power);
+  setToggleActive('insightsRangeToggle', power);
 
   const cumulative = loadPref('cumulativeRange', toggleOptions('cumRangeToggle'), 'all');
   setCumulativeRange(cumulative);
@@ -341,10 +344,26 @@ function restorePersistedRanges(){
 }
 
 // ---------- UI events ----------
+// Live chart and Insights panel share the same power range (state.range +
+// the 'powerRange' pref); whichever toggle is clicked, both stay in sync.
+function setPowerRangeUI(value){
+  setToggleActive('rangeToggle', value);
+  setToggleActive('insightsRangeToggle', value);
+}
+
 document.getElementById('rangeToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-range]');
   if(!btn) return;
-  setToggleActive('rangeToggle', btn.dataset.range);
+  setPowerRangeUI(btn.dataset.range);
+  setRange(btn.dataset.range);
+  savePref('powerRange', btn.dataset.range);
+  loadHistory();
+});
+
+document.getElementById('insightsRangeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-range]');
+  if(!btn) return;
+  setPowerRangeUI(btn.dataset.range);
   setRange(btn.dataset.range);
   savePref('powerRange', btn.dataset.range);
   loadHistory();

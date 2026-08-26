@@ -435,12 +435,13 @@ async def api_solar_profile(bin_minutes: int = Query(5, ge=1, le=30)):
 
 @app.get("/api/insights/peak")
 async def api_insights_peak(
-    range: str = Query("all", description="today | 7d | all"),
+    range: str = Query("all", description="1h | today | 7d | all"),
 ):
     """
     Peak Production insight, computed server-side as MAX(raw solar_input)
     over the full-resolution readings table -- never from chart aggregates.
 
+    1h    -> the last rolling hour (same window as /api/history?range=1h)
     today -> today's solar-session window (sunrise onward)
     7d    -> the last 7 local calendar days
     all   -> entire raw history
@@ -449,13 +450,18 @@ async def api_insights_peak(
     """
     if range == "today":
         since = (await asyncio.to_thread(solar.get_today_window))["since"]
+    elif range == "1h":
+        # Same rolling cutoff the history endpoint uses for 1h: now - 1 hour.
+        since = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
+        ).isoformat()
     elif range == "7d":
         # The 7D view covers the last 7 local dates; start at their midnight.
         since = await asyncio.to_thread(database.local_days_ago_start_utc, 6)
     elif range == "all":
         since = None
     else:
-        return {"error": f"Unknown range '{range}'. Use one of: today, 7d, all."}
+        return {"error": f"Unknown range '{range}'. Use one of: 1h, today, 7d, all."}
     peak = await asyncio.to_thread(database.get_peak_solar_input, since)
     return {"range": range, **(peak or {})}
 
