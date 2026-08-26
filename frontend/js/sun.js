@@ -229,4 +229,4 @@ function startSunTicker(){
   setInterval(tickSunCountdown, SUN_COUNTDOWN_TICK_MS);
 }
 
-export { updateSunInfo, refreshSunInfo, startSunTicker };
+export { updateSunInfo, refreshSunInfo, startSunTicker, tickSunCountdown };

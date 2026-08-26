@@ -106,6 +106,11 @@ def get_sun_info() -> dict:
         happened, otherwise tomorrow's)
       - next_sunset: ISO timestamp of the next sunset (today if not yet
         happened, otherwise tomorrow's)
+      - sunrise/sunset: endpoints of the sun arc currently being traced.
+        Daytime and evening: today's window. After midnight (still night):
+        sunset rolls back to *yesterday's*, so clients sweeping the arc from
+        sunset to sunrise always anchor on the sunset that just happened --
+        never on tonight's still-future one.
       - seconds_until_sunrise: 0 if it's currently daytime (sunrise already
         passed and sunset hasn't)
       - seconds_until_sunset: 0 if it's currently night (sunset already
@@ -142,14 +147,27 @@ def get_sun_info() -> dict:
     if is_currently_night:
         seconds_until_sunset = 0.0
 
+    # Arc-window endpoints: bracket "now". After midnight the current night
+    # arc runs from yesterday's sunset to today's upcoming sunrise, so report
+    # yesterday's sunset instead of today's (future) one.
+    if now < s_today["sunrise"]:
+        s_yesterday = sun(
+            city_info.observer,
+            datetime.date.today() - datetime.timedelta(days=1),
+            tzinfo=city_info.tzinfo,
+        )
+        arc_sunset = s_yesterday["sunset"]
+    else:
+        arc_sunset = s_today["sunset"]
+
     return {
         "next_sunrise": next_sunrise.isoformat(),
         "next_sunset": next_sunset.isoformat(),
-        # Today's actual daylight window (tomorrow's date fields when the
-        # day has ended). Additive: lets clients place a "now" marker on the
-        # true day arc without deriving it from countdown arithmetic.
+        # The current day/night arc window. Additive: lets clients place a
+        # "now" marker on the true arc without deriving it from countdown
+        # arithmetic. See docstring for how sunset shifts after midnight.
         "sunrise": s_today["sunrise"].isoformat(),
-        "sunset": s_today["sunset"].isoformat(),
+        "sunset": arc_sunset.isoformat(),
         "seconds_until_sunrise": seconds_until_sunrise,
         "seconds_until_sunset": seconds_until_sunset,
         "is_night": is_currently_night,
