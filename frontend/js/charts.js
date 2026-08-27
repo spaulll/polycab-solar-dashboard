@@ -17,7 +17,7 @@
 // a data gap. Genuine communication gaps inside a session still break the
 // line (GAP_THRESHOLD_MS).
 
-import { GAP_THRESHOLD_MS, MAX_POINTS } from './config.js';
+import { GAP_THRESHOLD_MS, MAX_POINTS, TODAY_MAX_POINTS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
 import { fetchTodayProjection } from './api.js';
@@ -783,10 +783,35 @@ function appendLivePoint(reading){
   solarDs.push({x: t, y: reading.Solar_Input});
   powerDs.push({x: t, y: reading.Inverter_Power});
 
-  // Trim to a reasonable in-memory window depending on range so the chart
-  // doesn't grow unbounded during a long session.
-  const maxPoints = MAX_POINTS[state.range] || 3000;
-  while(solarDs.length > maxPoints){ solarDs.shift(); powerDs.shift(); }
+  // Trim policies -- neither session may grow unbounded, but they are NOT
+  // the same shape:
+  //   - '1h' is a sliding window: oldest points leave as newest arrive.
+  //   - 'today' is a bounded solar-day session (sunrise -> sunset), NOT
+  //     sliding. Capping it erases the early morning one point per tick once
+  //     the day's sample count crosses any fixed limit (guaranteed on pages
+  //     opened in the afternoon), so its memory is bounded structurally:
+  //     appends stop at sunset (guarded above) and stale points from before
+  //     the current sunrise (e.g. a tail left over a midnight rollover) are
+  //     purged by timestamp. TODAY_MAX_POINTS only acts as a failsafe.
+  if(state.range === 'today'){
+    const srMs = todayWindow?.sunrise ? Date.parse(todayWindow.sunrise) : NaN;
+    if(isFinite(srMs)){
+      let stale = 0;
+      while(stale < solarDs.length &&
+            new Date(solarDs[stale].x).getTime() < srMs){ stale++; }
+      if(stale > 0){
+        solarDs.splice(0, stale);
+        powerDs.splice(0, stale);
+      }
+    }
+    while(solarDs.length > TODAY_MAX_POINTS){
+      solarDs.shift();
+      powerDs.shift();
+    }
+  } else {
+    const maxPoints = MAX_POINTS[state.range] || 3000;
+    while(solarDs.length > maxPoints){ solarDs.shift(); powerDs.shift(); }
+  }
 
   powerChart.update('none'); // no animation -> smooth, no flicker
 }
