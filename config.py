@@ -76,6 +76,16 @@ POWERCUT_ERROR_THRESHOLD: int = _env_int("POWERCUT_ERROR_THRESHOLD", 5)
 # unreachable required before a zero-production powercut is recorded -- guards
 # against a single flaky ping opening a bogus row.
 POWERCUT_ZERO_THRESHOLD: int = _env_int("POWERCUT_ZERO_THRESHOLD", 3)
+# Width of the "no power" band in watts: Solar_Input and Inverter_Power at or
+# below this count as zero production. The Modbus registers resolve to 0.1 W,
+# so anything narrower than a couple of LSBs lets a single noisy tick both
+# evade detection and (worse) reset an in-progress outage.
+POWERCUT_ZERO_POWER_W: float = _env_float("POWERCUT_ZERO_POWER_W", 5.0)
+# Consecutive healthy daytime reads required before an open powercut row is
+# closed and the status flips back to online. Recovery hysteresis: a single
+# noise/glitch read during an ongoing cut must not wipe the confirmations or
+# truncate the recorded outage.
+POWERCUT_ONLINE_CONFIRMATIONS: int = _env_int("POWERCUT_ONLINE_CONFIRMATIONS", 3)
 # Optional: IP of an always-on device on the same power circuit (e.g. a
 # Wi-Fi extender). Used for both powercut detection paths:
 #   - Zero-production path: if a successful Modbus read reports both power

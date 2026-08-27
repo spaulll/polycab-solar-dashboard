@@ -146,6 +146,17 @@ figure. Setting `ELECTRICITY_TARIFF=0` hides the panel entirely.
 primary weather provider for the top bar; when missing or empty, the
 dashboard automatically uses **Open-Meteo**, which requires no key at all.
 
+**Powercut detection** tuning lives in four knobs (defaults shown):
+`POWERCUT_ERROR_THRESHOLD=5` (consecutive hard Modbus failures before the
+error path even considers a cut), `POWERCUT_ZERO_THRESHOLD=3` (confirming
+reads to open a zero-production cut), `POWERCUT_ZERO_POWER_W=5.0` (watts at or
+below which both `Solar_Input` and `Inverter_Power` count as "no production" —
+kept well above the 0.1 W register resolution so one noisy tick can neither
+hide nor reset an outage) and `POWERCUT_ONLINE_CONFIRMATIONS=3` (healthy reads
+required to close a cut again). `POWERCUT_CHECK_IP` should point at an
+always-on device on the same circuit as the inverter — it's what distinguishes
+a real cut from an inverter/dongle glitch. See `.env.example` for details.
+
 The **Weather Impact** panel is fed by `WEATHER_HISTORY_ENABLED` (default
 `true`): during each nightly maintenance run the dashboard fetches daily
 cloud/rain/temperature/sunshine history from Open-Meteo's free **Archive API**
@@ -202,18 +213,24 @@ directory (path controlled by `DB_PATH`). The schema is created via
   powercut is recorded only when both the check IP and the inverter IP are
   unreachable (check IP up → glitch; check IP down but inverter still answering
   → keep waiting). Additionally, *successful reads* that report both
-  `Solar_Input ≤ 0.1` **and** `Inverter_Power ≤ 0.1` are treated as the start of
-  a powercut when the check IP is also unreachable — this catches the window
-  where the inverter still answers Modbus on residual power but produces
-  nothing. A small non-zero `Solar_Input` with a zero `Inverter_Power` (low
-  light) is intentionally ignored. The zero-production signal must repeat for
-  `POWERCUT_ZERO_THRESHOLD` consecutive reads (default 3) before a row is
-  opened. The next successful read showing real
-  production closes the open row with a computed duration. Errors during night
+  `Solar_Input ≤ POWERCUT_ZERO_POWER_W` **and**
+  `Inverter_Power ≤ POWERCUT_ZERO_POWER_W` (default 5 W) are treated as the
+  start of a powercut when the check IP is also unreachable — this catches the
+  window where the inverter still answers Modbus on residual power but
+  produces nothing. A small non-zero `Solar_Input` with a zero
+  `Inverter_Power` (low light) is intentionally ignored. Both edges are
+  debounced: a row opens only after `POWERCUT_ZERO_THRESHOLD` consecutive
+  confirming reads, and closes only after `POWERCUT_ONLINE_CONFIRMATIONS`
+  consecutive healthy reads — so a single noisy read mid-outage can neither
+  flip the UI back to Online nor truncate the recorded duration. The frontend
+  trusts the health status carried on every WebSocket message (including
+  successful readings), so during a real cut the Inverter Status card stays on
+  "Unreachable" with the offline timer running for the entire episode, even
+  while Modbus itself keeps succeeding on residual power. Errors during night
   mode are ignored, and an open row survives app/host restarts — so offline
   episodes are recorded even when the dashboard machine itself loses power.
-  The Inverter Status card shows the live state (Online / Unreachable + offline
-  timer / Night mode) and a powercut count per selected range.
+  The card shows the live state (Online / Unreachable + offline timer / Night
+  mode) and a powercut count per selected range.
 - **Historical/aggregate/CSV endpoints** query SQLite directly and are safe to
   call anytime, independent of the live polling loop.
 - **Solar-day views** (`solar.py`): the Today/7D/All charts are shaped around

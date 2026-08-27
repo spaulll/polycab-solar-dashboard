@@ -250,7 +250,13 @@ function handleWSMessage(msg){
     // Re-project the pace tag from the fetched typical-day curve (no
     // refetch per tick).
     updatePaceTag(msg.data.E_Today);
-    setInverterStatus('online', {
+    // Successful Modbus reads still happen during a real powercut (the
+    // inverter holds up on residual power with both powers at ~0), so the
+    // server may flag this reading with status 'offline'. Trust the payload:
+    // forcing 'online' here used to flip the card back every poll and kill
+    // the offline timer mid-outage.
+    setInverterStatus(msg.status || 'online', {
+      offline_since: msg.offline_since,
       last_error: '',
       last_reading_at: msg.data.timestamp,
     });
