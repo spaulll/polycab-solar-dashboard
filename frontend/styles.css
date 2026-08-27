@@ -1667,6 +1667,11 @@ footer{
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
+  /* --- Topbar pills: keep the colored dot, drop the text label so the
+         connection + day/night pills don't crowd the actions on narrow
+         viewports. The dot's color still signals the state at a glance. --- */
+  .pill-label{ display: none; }
+
   /* --- Sun path card: dial scales with the narrow viewport --- */
   .sun-arc-plot{ width: min(100%, 325px); margin-top: -33.33px; }
   .sun-arc-countdown{ margin-top: -100.5px; }
