@@ -248,9 +248,11 @@ def get_weather(force: bool = False) -> dict:
         try:
             data = _fetch_openweathermap()
         except Exception as e:                       # noqa: BLE001 - fallback path
+            print(f"[WEATHER] openweathermap failed: {e!r}; falling back to open-meteo")
             errors.append(f"openweathermap: {e}")
             data = None
     else:
+        print("[WEATHER] OPENWEATHER_API_KEY not set; using open-meteo")
         data = None
 
     if data is None:
