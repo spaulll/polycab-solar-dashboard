@@ -1650,6 +1650,30 @@ footer{
   color: var(--faint);
 }
 
+/* Fixed-size card: the header stays put, the episode list scrolls inside.
+   (.weather-card alone would grow with content and has no desktop cap.) */
+.weather-card.errors-card{
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;              /* the list is the only scroll container */
+  height: min(60dvh, 480px);
+}
+
+.weather-card.errors-card .errors-list{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Desktop (>=1020px): fixed width + height, matching the weather modal's
+   breakpoint; slightly wider than the weather card for long error text. */
+@media (min-width: 1020px){
+  .weather-card.errors-card{
+    width: 380px;
+    height: min(520px, 72vh);
+  }
+}
+
 .errors-list{ display: flex; flex-direction: column; }
 
 .err-item{
