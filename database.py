@@ -119,10 +119,10 @@ CREATE INDEX IF NOT EXISTS idx_powercuts_started ON powercuts (started_at);
 -- Error history: one row per distinct error episode (consecutive identical
 -- failures collapse into a single row -- the poll loop retries the same
 -- error every ERROR_RETRY_DELAY, which would otherwise flood the log; a
--- repeat after recovery logs as a new episode). Bounded: pruned to the most
--- recent ERROR_LOG_KEEP rows on insert. Purely informational -- it feeds the
--- sidebar's error counter + history popup; powercut *episodes* with their
--- durations live in the powercuts table above.
+-- repeat after recovery logs as a new episode). Rotated: rows older than
+-- ERROR_LOG_RETENTION_DAYS are deleted on insert and on read. Purely
+-- informational -- it feeds the sidebar's error counter + history popup;
+-- powercut *episodes* with their durations live in the powercuts table.
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     logged_at TEXT NOT NULL,           -- ISO 8601 UTC, first occurrence
@@ -283,17 +283,25 @@ def get_powercut_count(range_str: str = "lifetime") -> int:
 
 
 # ---------------------------------------------------------------------------
-# Error history (bounded, episode-based)
+# Error history (episode-based, 7-day rotation)
 # ---------------------------------------------------------------------------
-ERROR_LOG_KEEP = 200  # rows retained; pruned on every insert
+ERROR_LOG_RETENTION_DAYS = 7
+
+
+def _prune_error_log(conn: sqlite3.Connection) -> None:
+    """Drop error_log rows older than the retention window (in place)."""
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=ERROR_LOG_RETENTION_DAYS)
+    ).isoformat()
+    conn.execute("DELETE FROM error_log WHERE logged_at < ?", (cutoff,))
 
 
 def log_error(message: str, logged_at: Optional[str] = None) -> bool:
     """
-    Append one error episode to the bounded error history. Consecutive
-    identical messages collapse into the existing row (the poll loop retries
-    the same failure every ERROR_RETRY_DELAY); a repeat after a recovery
-    logs as a new episode. Returns True when a row was added.
+    Append one error episode to the error history. Consecutive identical
+    messages collapse into the existing row (the poll loop retries the same
+    failure every ERROR_RETRY_DELAY); a repeat after a recovery logs as a
+    new episode. Returns True when a row was added.
     """
     conn = _connect()
     try:
@@ -307,11 +315,7 @@ def log_error(message: str, logged_at: Optional[str] = None) -> bool:
             "INSERT INTO error_log (logged_at, message) VALUES (?, ?)",
             (now, message),
         )
-        conn.execute(
-            "DELETE FROM error_log WHERE id NOT IN "
-            "(SELECT id FROM error_log ORDER BY id DESC LIMIT ?)",
-            (ERROR_LOG_KEEP,),
-        )
+        _prune_error_log(conn)
         conn.commit()
         return True
     finally:
@@ -319,13 +323,16 @@ def log_error(message: str, logged_at: Optional[str] = None) -> bool:
 
 
 def get_recent_errors(limit: int = 50) -> list:
-    """The most recent error episodes, newest first: [{logged_at, message}]."""
+    """Error episodes inside the retention window, newest first."""
     conn = _connect()
     try:
+        _prune_error_log(conn)
         rows = conn.execute(
-            "SELECT logged_at, message FROM error_log ORDER BY id DESC LIMIT ?",
+            "SELECT logged_at, message FROM error_log "
+            "ORDER BY id DESC LIMIT ?",
             (max(1, int(limit)),),
         ).fetchall()
+        conn.commit()
         return [dict(r) for r in rows]
     finally:
         conn.close()
