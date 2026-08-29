@@ -15,7 +15,7 @@ const nightBanner = el('nightBanner'), nightText = el('nightText');
 const lastUpdated = el('lastUpdated');
 const invStatusEl = el('invStatus'), invOfflineTimer = el('invOfflineTimer');
 const invDot = el('invDot');
-const invLastReading = el('invLastReading'), invLastError = el('invLastError');
+const invLastReading = el('invLastReading');
 
 // ---------- Connection pill ----------
 // States: 'live' (green), 'syncing' (degraded: WS down, reconnecting),
@@ -141,7 +141,10 @@ function fmtDuration(totalSec){
 function stopOfflineTicker(){
   if(offlineTicker){ clearInterval(offlineTicker); offlineTicker = null; }
   offlineSinceMs = null;
-  invOfflineTimer.style.display = 'none';
+  // The line's height stays reserved (visibility, not display) so the card
+  // never reflows when the timer appears or disappears.
+  invOfflineTimer.classList.remove('show');
+  invOfflineTimer.textContent = '';
 }
 
 function tickOfflineTimer(){
@@ -161,13 +164,12 @@ function setInverterStatus(status, info = {}){
   invDot.className = 'dot ' + ({ online: 'live', offline: 'down', night: 'night' }[status] || '');
 
   if(info.last_reading_at != null) invLastReading.textContent = fmtTime(info.last_reading_at);
-  if(info.last_error !== undefined) invLastError.textContent = info.last_error || 'none';
 
   if(status === 'offline' && info.offline_since){
     const parsed = Date.parse(info.offline_since);
     if(!isNaN(parsed)){
       offlineSinceMs = parsed;
-      invOfflineTimer.style.display = 'block';
+      invOfflineTimer.classList.add('show');
       tickOfflineTimer();
       if(!offlineTicker) offlineTicker = setInterval(tickOfflineTimer, 1000);
       return;

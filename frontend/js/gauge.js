@@ -6,8 +6,8 @@
 //
 // Design rules for this widget:
 //   - Dial scale derives from the inverter's rated output (config.js):
-//     rounded up to the next whole kW (3600 W -> 0-4 kW dial). The head tag
-//     carries the scale; faint ticks every 500 W anchor the needle.
+//     rounded up to the next whole kW (3600 W -> 0-4 kW dial). The card
+//     tooltip carries the scale; faint ticks every 500 W anchor the needle.
 //   - Indicator = the pen's sweeping value arc (accent) + a thin needle at
 //     its leading edge, both driven by CSS transitions on transform /
 //     stroke-dashoffset, so motion stays on the compositor and collapses to
@@ -159,8 +159,9 @@ export function initGauge(){
 
   const max = gaugeMax();
   dial.replaceChildren(buildDial(max));
-  const tag = el('gaugeScale');
-  if(tag) tag.textContent = `0–${max / 1000} kW`;
+  // The scale lives in the card's tooltip (and the dial's ticks) -- the
+  // readout itself stays minimal.
+  if(panelEl) panelEl.title = `Inverter output · scale 0–${max / 1000} kW`;
   setIndicator(0, max);
 }
 

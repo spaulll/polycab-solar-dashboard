@@ -84,6 +84,11 @@ function fetchPowercutCount(range){
   return getJSON(`/api/powercuts?range=${range}`).then(json => json.count ?? 0);
 }
 
+// Recent inverter error episodes, newest first (server-side bounded log).
+function fetchErrors(limit = 50){
+  return getJSON(`/api/errors?limit=${limit}`).then(json => json.errors || []);
+}
+
 // Weather <-> production correlation: cloud-class buckets, matched-day
 // scatter points and a Pearson r from /api/weather/correlation (the
 // maintenance thread backfills the archived weather server-side).
@@ -115,6 +120,7 @@ export {
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,
+  fetchErrors,
   fetchWeather,
   csvExportURL,
 };

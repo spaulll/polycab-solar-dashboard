@@ -291,6 +291,13 @@ async def polling_loop():
             print(f"[{now_iso}] Read Error: {err_msg}")
             latest_state["last_error"] = err_msg
             latest_state["consecutive_error_count"] += 1
+            # Episode-based history for the sidebar's error counter/popup
+            # (consecutive identical failures collapse server-side). Must
+            # never take the polling loop down with it.
+            try:
+                database.log_error(err_msg, now_iso)
+            except Exception as log_exc:
+                print(f"[{now_iso}] error-log write failed: {log_exc}")
 
             # Only a run of POWERCUT_ERROR_THRESHOLD consecutive daytime
             # errors counts as a powercut; shorter glitches stay visible via
@@ -684,6 +691,15 @@ async def api_powercuts(
     except ValueError as e:
         return {"error": str(e)}
     return {"range": range, "count": count}
+
+
+@app.get("/api/errors")
+async def api_errors(
+    limit: int = Query(50, ge=1, le=200, description="Max episodes to return"),
+):
+    """Recent inverter error episodes, newest first (bounded history)."""
+    errors = await asyncio.to_thread(database.get_recent_errors, limit)
+    return {"errors": errors}
 
 
 @app.get("/api/sun")

@@ -25,6 +25,7 @@ import { applyChartTheme } from './charts.js';
 import { VIEWS, initRouter, navigate } from './router.js';
 import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
 import { initGauge, updateGauge, dimGauge } from './gauge.js';
+import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
 import { toast } from './toast.js';
 import { initPullToRefresh } from './pullRefresh.js';
@@ -247,6 +248,8 @@ function handleWSMessage(msg){
     setConn('live');
     setMode(false);
     dimStatCards(false);
+    dimGauge(false);
+    noteRecovery();
     updateStatCards(msg.data);
     updateGauge(msg.data.Inverter_Power);
     pushAndRender(msg.data);
@@ -300,6 +303,7 @@ function handleWSMessage(msg){
   else if(msg.type === 'error'){
     // Backend already retries; just reflect it isn't fresh data
     setConnText('read error — retrying');
+    noteError(msg);
     // The server decides the health status: below the powercut error
     // threshold it stays as-is (usually online) and only the Last Error
     // field updates; a confirmed cut arrives with status 'offline'.
@@ -459,6 +463,8 @@ function refreshLive(){
   initWeatherImpact();
   await loadWeatherImpact();
   await loadPowercutCount();
+  // Error history counter (server-side bounded log; WS errors fold in live).
+  initErrors();
   connectWebSocket(handleWSMessage);
   // Daily summary + powercuts intervals follow day/night (see
   // startDayPolling/stopDayPolling); the initial /api/status already told us

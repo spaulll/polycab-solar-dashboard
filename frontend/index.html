@@ -102,6 +102,13 @@
         <path d="m15.5 8.5-2 5-5 2 2-5z"/>
       </g>
     </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </g>
+    </symbol>
 
     <symbol id="wi-sun" viewBox="0 0 24 24">
       <g fill="currentColor" stroke="currentColor" style="stroke-width:var(--wi-sw,1.4)">
@@ -293,11 +300,6 @@
         <div class="panel-body gauge-body">
           <div class="gauge-dial" id="gaugeDial"></div>
           <div class="gauge-readout">
-            <p class="gauge-label">
-              <span class="badge-w" aria-hidden="true">W</span>
-              <span>Power</span>
-              <span class="tag" id="gaugeScale"></span>
-            </p>
             <p class="gauge-watts"><span class="num" id="gaugeValue">–</span><span class="unit">W</span></p>
             <p class="gauge-rate" id="gaugeRate">&nbsp;</p>
           </div>
@@ -320,11 +322,16 @@
               <dt>Last reading</dt>
               <dd id="invLastReading">–</dd>
             </div>
-            <div class="meta-row">
-              <dt>Last error</dt>
-              <dd id="invLastError">–</dd>
-            </div>
           </dl>
+          <div class="err-row">
+            <span class="err-label">Errors</span>
+            <button class="err-pill" id="errPill" type="button" title="Error history"
+                    aria-haspopup="dialog" aria-expanded="false" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert"/></svg>
+              <span id="errCount">0</span>
+            </button>
+            <span class="err-none" id="errNone">No errors</span>
+          </div>
           <div class="pc-row">
             <span class="pc-label">Powercuts</span>
             <span class="pc-controls">
@@ -641,6 +648,19 @@
     </dl>
     <div class="weather-forecast" id="wcForecast"></div>
     <p class="weather-provider" id="wcProvider"></p>
+  </div>
+</div>
+
+<!-- ================= Error history popup / bottom sheet ================= -->
+<div class="weather-overlay" id="errorsOverlay" hidden>
+  <div class="weather-card" role="dialog" aria-modal="true" aria-label="Error history">
+    <div class="weather-drag" id="errorsDrag" aria-hidden="true">
+      <span class="weather-drag-bar"></span>
+    </div>
+    <button class="weather-close" id="errorsClose" aria-label="Close">×</button>
+    <h3 class="errors-title">Error History</h3>
+    <p class="errors-sub" id="errorsSub">–</p>
+    <div class="errors-list" id="errorsList"></div>
   </div>
 </div>
 

@@ -895,7 +895,8 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
 .btn:active,
 .weather-chip:active,
 .theme-toggle:active,
-.weather-close:active{
+.weather-close:active,
+.err-pill:active{
   transform: scale(0.97);
 }
 
@@ -906,6 +907,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
 .weather-chip:focus-visible,
 .theme-toggle:focus-visible,
 .weather-close:focus-visible,
+.err-pill:focus-visible,
 select:focus-visible,
 .date-range input[type="date"]:focus-visible{
   outline: none;
@@ -919,7 +921,8 @@ select:focus-visible,
   .btn:active,
   .weather-chip:active,
   .theme-toggle:active,
-  .weather-close:active{
+  .weather-close:active,
+  .err-pill:active{
     transform: none;
   }
 }
@@ -1056,10 +1059,14 @@ select:hover{ color: var(--text); }
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+  /* Generic panel-body padding; the card's extra height comes from the
+     bigger dial -- budgeted so the right stack's natural height stays under
+     the chart panel's fixed height (see the .layout-live stretch note). */
+  padding: var(--space-4);
 }
 
 .gauge-dial{
-  width: 130px;
+  width: 150px;
   flex: none;
 }
 
@@ -1120,37 +1127,6 @@ select:hover{ color: var(--text); }
   gap: 7px;
 }
 
-.gauge-label{
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--faint);
-  white-space: nowrap;
-}
-
-.gauge-label .tag{ margin-left: 2px; }
-
-/* Round unit badge in front of the label (the reference card's "W" coin). */
-.badge-w{
-  width: 22px;
-  height: 22px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--dim);
-}
-
 .gauge-watts{
   margin: 0;
   font-family: var(--mono);
@@ -1192,20 +1168,12 @@ select:hover{ color: var(--text); }
     Inverter status panel
    ========================================================================== */
 
-/* Health row: status dot + label, hairline below (reference card rhythm). */
+/* Health row: status dot + label. Deliberately border-free -- the card reads
+   as a quiet stack of rows separated by spacing alone. */
 .inv-status-row{
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-/* The row's own border separates it from the meta list; drop the list's
-   duplicate top hairline (same pattern as .insight + .meta-list). */
-.inv-status-row + .meta-list{
-  margin-top: 0;
-  border-top: none;
 }
 
 .inv-status-value{
@@ -1218,13 +1186,82 @@ select:hover{ color: var(--text); }
 .inv-status-value.offline{ color: var(--err); }
 .inv-status-value.night{ color: var(--night); }
 
+/* Offline duration line: its height is ALWAYS reserved (visibility, never
+   display, plus a min-height because an empty element has no line box) so
+   "Offline for 0h 00m 12s" appearing mid-outage cannot shift the rows below
+   by a single pixel. */
 .inv-offline-timer{
-  display: none;
   font-family: var(--mono);
   font-size: var(--font-size-2);
+  line-height: 1.4;
+  min-height: 17px;
   color: var(--err);
-  margin: 8px 0 0;
+  margin: 4px 0 0;
+  visibility: hidden;
 }
+
+.inv-offline-timer.show{ visibility: visible; }
+
+/* The card drops the generic meta-row hairlines: rows are plain label/value
+   pairs on shared spacing (scoped here -- Insights keeps its dividers). The
+   8px margins keep the card's natural height under the chart panel's fixed
+   height so the live-view stretch rule never inflates the chart. */
+.panel-status .meta-list{
+  margin-top: 8px;
+  border-top: none;
+}
+
+.panel-status .meta-row{
+  border-bottom: none;
+  padding: 8px 0;
+}
+
+/* Error history: label left, counter right -- "No errors" as plain quiet
+   text, or an alert badge (opens the history popup) once errors exist. */
+.err-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: 8px;
+}
+
+.err-label{
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.err-none{
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  color: var(--faint);
+}
+
+.err-pill{
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel-2);
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  font-weight: 600;
+  color: var(--err);
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+
+.err-pill svg{ width: 12px; height: 12px; flex: none; }
+
+.err-pill:hover{ border-color: var(--err); }
+
+.err-pill[hidden]{ display: none; }
 
 .meta-list{
   margin: 14px 0 0;
@@ -1259,15 +1296,14 @@ select:hover{ color: var(--text); }
 }
 
 /* Powercuts: one compact row -- label left, range select + live count right
-   (the reference card's inline counter). Shares the meta rows' rhythm; the
-   tighter margin keeps the card's natural height below the chart panel's
-   fixed height so the live-view stretch rule never inflates the chart. */
+   (the reference card's inline counter). Shares the meta rows' rhythm and
+   the 8px margins that keep the card under the chart panel's height. */
 .pc-row{
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .pc-controls{
@@ -1595,6 +1631,58 @@ footer{
 }
 
 /* ==========================================================================
+    Error history popup — reuses the weather overlay/sheet shell verbatim
+   ========================================================================== */
+
+.errors-title{
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Desktop modal: the weather sheet loses its drag handle and the title row
+   moves up into the freed space (mobile keeps the handle above the title). */
+.errors-sub{
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: var(--font-size-1);
+  color: var(--faint);
+}
+
+.errors-list{ display: flex; flex-direction: column; }
+
+.err-item{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.err-item:last-child{ border-bottom: none; }
+
+.err-when{
+  font-family: var(--mono);
+  font-size: var(--font-size-1);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.err-what{
+  font-size: var(--font-size-2);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.err-empty{
+  margin: 8px 0 0;
+  font-size: var(--font-size-2);
+  color: var(--faint);
+  text-align: center;
+}
+
+/* ==========================================================================
     Toasts + pull-to-refresh hint
    ========================================================================== */
 
@@ -1868,7 +1956,7 @@ footer{
   .stat-value{ font-size: 20px; }
 
   /* --- Output gauge: trim the dial so label + readout keep one line --- */
-  .gauge-dial{ width: 108px; }
+  .gauge-dial{ width: 120px; }
 
   /* --- Gen strip: 2-up with the 5th card (This Year) taking the full
          row below, so no cell is ever empty; wide card follows full-width */
@@ -1894,5 +1982,5 @@ footer{
   .stat-card{ padding: 11px 12px; }
   .stat-value{ font-size: 18px; }
   .gen-card{ padding: 11px 12px; }
-  .gauge-dial{ width: 92px; }
+  .gauge-dial{ width: 100px; }
 }
