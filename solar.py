@@ -16,6 +16,7 @@ contain only daylight readings by construction.
 """
 import datetime as dt
 import math
+import statistics
 import time
 from typing import Optional
 
@@ -29,14 +30,15 @@ SESSION_BUCKET_SECONDS = 60
 ALLOWED_SESSION_BINS = (60, 300, 900)
 
 # Minimum fraction of the *expected* reading count a bucket must contain to
-# count as observed. Expected count derives from the normal sampling interval
-# (config.POLL_DELAY seconds between polls): a full bucket expects roughly
-# bucket_seconds / POLL_DELAY samples (~180 at the 5 s default). Below this
-# threshold -- e.g. after a power cut or comms loss covering most of the
-# bucket -- the bucket is reported missing instead of averaged into a value
-# that would fabricate production. Partial edge buckets (sunrise/sunset
-# truncation, or the in-progress bucket on the current day) are held to a
-# proportionally scaled expectation.
+# count as observed. Expected count derives from the sampling interval the
+# data was actually recorded at (the day's observed median inter-sample gap,
+# falling back to config.POLL_DELAY when a window is too sparse to measure):
+# a full bucket expects roughly bucket_seconds / observed_gap samples (~180
+# at the 5 s default). Below this threshold -- e.g. after a power cut or
+# comms loss covering most of the bucket -- the bucket is reported missing
+# instead of averaged into a value that would fabricate production. Partial
+# edge buckets (sunrise/sunset truncation, or the in-progress bucket on the
+# current day) are held to a proportionally scaled expectation.
 MIN_BUCKET_COVERAGE = 0.5
 
 # Default bin width for the long-term profile (minutes).
@@ -83,6 +85,33 @@ def get_today_window() -> dict:
     return {**info, "since": to_utc_naive_iso(info["sunrise"])}
 
 
+def _observed_poll_delay(rows: list[dict]) -> float:
+    """
+    The median gap between consecutive readings in `rows` (seconds).
+
+    The bucket coverage rule needs to know how many samples a full bucket
+    *should* contain -- but that depends on the rate the data was actually
+    recorded at, not the rate currently configured: POLL_DELAY is tuned in
+    .env and changes over time, while history keeps the cadence it was
+    written with. Measuring the median inter-sample gap makes the rule
+    rate-agnostic in both directions (a 10 s day is judged at 10 s, a 5 s
+    day at 5 s) and robust against the very events it guards against, since
+    outage gaps and retry bursts cannot move the median. Falls back to
+    config.POLL_DELAY when the window is too sparse to measure (< 2 rows).
+    """
+    ts = []
+    for r in rows:
+        t = dt.datetime.fromisoformat(r["timestamp"])
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=dt.timezone.utc)
+        ts.append(t)
+    if len(ts) < 2:
+        return config.POLL_DELAY
+    ts.sort()
+    gaps = [(b - a).total_seconds() for a, b in zip(ts, ts[1:])]
+    return max(statistics.median(gaps), 0.001)
+
+
 def _bucket_daylight(
     rows: list[dict],
     sunrise: dt.datetime,
@@ -96,11 +125,13 @@ def _bucket_daylight(
     (buckets, slot_count) where slot_count = ceil(daylight_span / bin) is the
     day's full visual width -- including buckets that ended up missing.
 
-    A bucket is emitted only if it passes the MIN_BUCKET_COVERAGE rule;
-    missing buckets are simply absent, so the caller (and chart) can
-    distinguish "no evidence" from a genuine 0 W reading. Partial buckets at
-    the sunrise/sunset edges -- and on the in-progress current day -- are
-    held to an expectation scaled to their actual duration.
+    A bucket is emitted only if it passes the MIN_BUCKET_COVERAGE rule, with
+    the expected count derived from the day's own observed sampling interval
+    (see _observed_poll_delay); missing buckets are simply absent, so the
+    caller (and chart) can distinguish "no evidence" from a genuine 0 W
+    reading. Partial buckets at the sunrise/sunset edges -- and on the
+    in-progress current day -- are held to an expectation scaled to their
+    actual duration.
     """
     span = (day_end - sunrise).total_seconds()
     if span <= 0:
@@ -125,7 +156,10 @@ def _bucket_daylight(
             cell[3] += r["inverter_power"]
             cell[4] += 1
 
-    expected_per_slot = bin_seconds / max(config.POLL_DELAY, 0.001)
+    # Judge this window by the cadence it was actually recorded at, not the
+    # currently configured one (mixed-rate history stays honest in both
+    # directions -- see _observed_poll_delay).
+    poll = _observed_poll_delay(rows)
     buckets = []
     for k in range(slot_count):
         cell = acc.get(k)
@@ -133,7 +167,7 @@ def _bucket_daylight(
         # Expected count scales down for truncated slots (sunrise/sunset
         # edges, today's in-progress bucket).
         slot_span = min((k + 1) * bin_seconds, span) - k * bin_seconds
-        expected = max(1.0, slot_span / max(config.POLL_DELAY, 0.001))
+        expected = max(1.0, slot_span / poll)
         if n_rows < MIN_BUCKET_COVERAGE * expected:
             continue
         _, s_sum, s_n, i_sum, i_n = cell
