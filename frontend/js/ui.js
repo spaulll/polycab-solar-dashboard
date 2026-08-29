@@ -14,6 +14,7 @@ const modeDot = el('modeDot'), modeText = el('modeText');
 const nightBanner = el('nightBanner'), nightText = el('nightText');
 const lastUpdated = el('lastUpdated');
 const invStatusEl = el('invStatus'), invOfflineTimer = el('invOfflineTimer');
+const invDot = el('invDot');
 const invLastReading = el('invLastReading'), invLastError = el('invLastError');
 
 // ---------- Connection pill ----------
@@ -156,6 +157,8 @@ function tickOfflineTimer(){
 function setInverterStatus(status, info = {}){
   invStatusEl.textContent = INV_STATUS_LABELS[status] || '—';
   invStatusEl.className = 'inv-status-value ' + (status || '');
+  // Health dot reuses the shared pill dot states (live/down/night).
+  invDot.className = 'dot ' + ({ online: 'live', offline: 'down', night: 'night' }[status] || '');
 
   if(info.last_reading_at != null) invLastReading.textContent = fmtTime(info.last_reading_at);
   if(info.last_error !== undefined) invLastError.textContent = info.last_error || 'none';

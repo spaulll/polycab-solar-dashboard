@@ -269,12 +269,12 @@ body{
 /* While body.booting is set, value elements keep their layout box but hide
    their placeholder glyphs behind a shimmer block. Removed once the first
    data pass lands, so "–" is never what a user sees on load. */
-body.booting :is(.stat-value .num, .gen-value .num, .insight-value){
+body.booting :is(.stat-value .num, .gen-value .num, .insight-value, .gauge-watts .num){
   color: transparent !important;
   position: relative;
 }
 
-body.booting :is(.stat-value .num, .gen-value .num, .insight-value)::before{
+body.booting :is(.stat-value .num, .gen-value .num, .insight-value, .gauge-watts .num)::before{
   content: "";
   position: absolute;
   inset: 12% 0 auto 0;
@@ -286,7 +286,7 @@ body.booting :is(.stat-value .num, .gen-value .num, .insight-value)::before{
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
-body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
+body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visibility: hidden; }
 
 @keyframes shimmer{
   from{ background-position: 120% 0; }
@@ -549,7 +549,8 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
 }
 
 /* Unit chips: the metric's unit as a small quiet chip beside the number. */
-.stat-value .unit{
+.stat-value .unit,
+.gauge-watts .unit{
   font-size: 10px;
   font-weight: 400;
   color: var(--dim);
@@ -709,6 +710,21 @@ body.booting :is(.stat-value .unit, .gen-value .unit){ visibility: hidden; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+/* Live view only: the right stack (output gauge + Inverter Status) must top
+   out at EXACTLY the Power Over Time panel's height. Stretching the sidebar
+   to the row height lets the status panel (flex:1) absorb whatever slack the
+   compact gauge card leaves, so both columns share one bottom edge. The
+   gauge + status pair is deliberately built shorter than the chart panel's
+   fixed height (panel head + 320px chart + borders), so the row is always
+   sized by the chart column and the chart panel is never inflated. Scoped
+   to the desktop two-column grid; phones stack the columns naturally.
+   (Generic .layout keeps align-items:start -- see the note above -- because
+   the Trends/Insights sidebars may legitimately outgrow their charts.) */
+@media (min-width: 1021px){
+  .layout-live{ align-items: stretch; }
+  .layout-live .panel-status{ flex: 1 1 auto; }
 }
 
 /* ==========================================================================
@@ -1026,15 +1042,176 @@ select:hover{ color: var(--text); }
 .chart-msg.show{ display: grid; }
 
 /* ==========================================================================
-   Inverter status panel
+   Live output gauge — semicircular SVG speedometer + watts readout
    ========================================================================== */
 
-.inv-status-value{
-  font-family: var(--mono);
-  font-size: 28px;
+/* Headless horizontal card (like the stat tiles): dial left, readout right.
+   Scoped under .col-side to out-rank the generic sidebar panel-body rule
+   (which stacks its children in a column) -- this body is a row. The SVG
+   itself is built by js/gauge.js; every color below is a theme custom
+   property, so theme switches recolor the drawing with zero JS. */
+.col-side .gauge-body{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.gauge-dial{
+  width: 130px;
+  flex: none;
+}
+
+.gauge-dial svg{ display: block; width: 100%; height: auto; }
+
+.gauge-track{
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+
+.gauge-ticks line{
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.gauge-tick-major{ stroke: var(--faint); }
+
+/* Value arc: grows from the left base end with the reading (pathLength 100,
+   dashoffset 100 -> 0). Butt caps keep the ends flush at rest/full scale. */
+.gauge-fill{
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 11;
+  transition: stroke-dashoffset var(--dur-slow) var(--ease-out);
+}
+
+/* Needle: drawn pointing at 12 o'clock, rotated around the pivot. CSS
+   transition gives the smooth ease between live readings. */
+.gauge-needle{
+  transform-origin: 100px 100px;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.gauge-needle-shape{ fill: var(--accent); }
+
+.gauge-hub{
+  fill: var(--accent);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.gauge-base{
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .gauge-needle, .gauge-fill{ transition: none; }
+}
+
+.gauge-readout{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.gauge-label{
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
   font-weight: 500;
-  line-height: 1.1;
-  margin-bottom: 4px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.gauge-label .tag{ margin-left: 2px; }
+
+/* Round unit badge in front of the label (the reference card's "W" coin). */
+.badge-w{
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.gauge-watts{
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--font-size-5);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Approximate energy rate under the watts; the line's height stays reserved
+   (gauge.js writes a no-break space when there is nothing honest to show). */
+.gauge-rate{
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  line-height: 1.2;
+  color: var(--faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-rate.active{ color: var(--dim); }
+
+/* Night mode dims the whole instrument exactly like the stat cards. */
+.gauge-panel.dim .gauge-dial svg{
+  opacity: 0.45;
+  transition: opacity 0.6s;
+}
+
+.gauge-panel.dim .gauge-watts{
+  color: var(--faint);
+  transition: color 0.6s;
+}
+
+/* ==========================================================================
+    Inverter status panel
+   ========================================================================== */
+
+/* Health row: status dot + label, hairline below (reference card rhythm). */
+.inv-status-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The row's own border separates it from the meta list; drop the list's
+   duplicate top hairline (same pattern as .insight + .meta-list). */
+.inv-status-row + .meta-list{
+  margin-top: 0;
+  border-top: none;
+}
+
+.inv-status-value{
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .inv-status-value.online{ color: var(--ok); }
@@ -1044,9 +1221,9 @@ select:hover{ color: var(--text); }
 .inv-offline-timer{
   display: none;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--font-size-2);
   color: var(--err);
-  margin-bottom: 8px;
+  margin: 8px 0 0;
 }
 
 .meta-list{
@@ -1081,15 +1258,23 @@ select:hover{ color: var(--text); }
   overflow-wrap: anywhere;
 }
 
-.pc-block{
-  margin-top: 16px;
-}
-
-.pc-head{
+/* Powercuts: one compact row -- label left, range select + live count right
+   (the reference card's inline counter). Shares the meta rows' rhythm; the
+   tighter margin keeps the card's natural height below the chart panel's
+   fixed height so the live-view stretch rule never inflates the chart. */
+.pc-row{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
+  margin-top: 10px;
+}
+
+.pc-controls{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .pc-label{
@@ -1102,11 +1287,11 @@ select:hover{ color: var(--text); }
 
 .pc-count{
   font-family: var(--mono);
-  font-size: 28px;
-  font-weight: 500;
-  line-height: 1.1;
+  font-size: var(--font-size-4);
+  font-weight: 600;
+  line-height: 1;
   color: var(--text);
-  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================================================
@@ -1677,10 +1862,13 @@ footer{
   .sun-arc-countdown{ margin-top: -100.5px; }
 
   /* --- Live stat strip: 2-up, tighter padding, value size that keeps the
-         longest realistic readings on one line at 320px --- */
+          longest realistic readings on one line at 320px --- */
   .stats{ grid-template-columns: repeat(2, 1fr); }
   .stat-card{ padding: 12px 14px; }
   .stat-value{ font-size: 20px; }
+
+  /* --- Output gauge: trim the dial so label + readout keep one line --- */
+  .gauge-dial{ width: 108px; }
 
   /* --- Gen strip: 2-up with the 5th card (This Year) taking the full
          row below, so no cell is ever empty; wide card follows full-width */
@@ -1706,4 +1894,5 @@ footer{
   .stat-card{ padding: 11px 12px; }
   .stat-value{ font-size: 18px; }
   .gen-card{ padding: 11px 12px; }
+  .gauge-dial{ width: 92px; }
 }

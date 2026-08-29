@@ -48,6 +48,10 @@ const MONTHLY_ALL_MONTHS = 1200;
 // Weather refresh cadence (backend caches server-side too).
 const WEATHER_REFRESH_MS = 15 * 60 * 1000;
 
+// Inverter's rated AC output in watts — the output gauge dials its scale
+// from this, rounded up to the next whole kW (3600 W -> 0-4 kW dial).
+const INVERTER_RATED_W = 3600;
+
 export {
   API_BASE,
   WS_URL,
@@ -63,4 +67,5 @@ export {
   SUN_COUNTDOWN_TICK_MS,
   WEATHER_REFRESH_MS,
   MONTHLY_ALL_MONTHS,
+  INVERTER_RATED_W,
 };

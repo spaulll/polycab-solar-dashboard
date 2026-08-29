@@ -259,8 +259,8 @@
 
   </div>
 
-  <!-- Live workspace: today's chart left, status right -->
-  <div class="layout">
+  <!-- Live workspace: today's chart left, gauge + status right -->
+  <div class="layout layout-live">
 
     <section class="col-main">
 
@@ -288,13 +288,32 @@
 
     <aside class="col-side">
 
+      <!-- Live output gauge -->
+      <div class="panel gauge-panel" id="gaugePanel">
+        <div class="panel-body gauge-body">
+          <div class="gauge-dial" id="gaugeDial"></div>
+          <div class="gauge-readout">
+            <p class="gauge-label">
+              <span class="badge-w" aria-hidden="true">W</span>
+              <span>Power</span>
+              <span class="tag" id="gaugeScale"></span>
+            </p>
+            <p class="gauge-watts"><span class="num" id="gaugeValue">–</span><span class="unit">W</span></p>
+            <p class="gauge-rate" id="gaugeRate">&nbsp;</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Inverter status -->
-      <div class="panel">
+      <div class="panel panel-status">
         <div class="panel-head">
           <h3 class="panel-title">Inverter Status</h3>
         </div>
         <div class="panel-body">
-          <div class="inv-status-value" id="invStatus">—</div>
+          <div class="inv-status-row">
+            <span class="dot" id="invDot"></span>
+            <span class="inv-status-value" id="invStatus">—</span>
+          </div>
           <div class="inv-offline-timer" id="invOfflineTimer"></div>
           <dl class="meta-list">
             <div class="meta-row">
@@ -306,17 +325,17 @@
               <dd id="invLastError">–</dd>
             </div>
           </dl>
-          <div class="pc-block">
-            <div class="pc-head">
-              <span class="pc-label">Powercuts</span>
+          <div class="pc-row">
+            <span class="pc-label">Powercuts</span>
+            <span class="pc-controls">
               <select id="pcRange">
                 <option value="today">Today</option>
                 <option value="7d">7 days</option>
                 <option value="30d">30 days</option>
                 <option value="lifetime">Lifetime</option>
               </select>
-            </div>
-            <div class="pc-count" id="pcCount">–</div>
+              <span class="pc-count" id="pcCount">–</span>
+            </span>
           </div>
         </div>
       </div>

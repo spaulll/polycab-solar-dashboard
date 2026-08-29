@@ -90,6 +90,7 @@ solar-dashboard/
     │   ├── pullRefresh.js    # Touch-only pull-down-to-refresh on the Live view
     │   ├── insights.js       # Conversion loss / peak / average computations
     │   ├── sun.js            # Sun path card (SVG arc + "now" marker) + countdown ticker
+    │   ├── gauge.js          # Live output gauge (SVG speedometer dial, watts + ≈ kWh/h readout)
     │   ├── ui.js             # Status pills (live/syncing/offline), night banner, ticker-driven stat cards
     │   ├── yield.js          # Average Daily Yield card (range-selectable avg/best/worst day)
     │   ├── impact.js         # Savings & Impact panel (money saved + CO2 avoided)
@@ -107,7 +108,7 @@ on the next browser reload.
 ### Navigation model
 
 One DOM, three views — **Live** (`#/live`: stat tiles, sun path, Power Over
-Time, inverter status), **Trends** (`#/trends`: generation totals, Daily
+Time, output gauge, inverter status), **Trends** (`#/trends`: generation totals, Daily
 Energy Log, Cumulative, Monthly, Weather Impact) and **Insights**
 (`#/insights`: yield stats, conversion/peak insights, Savings & CO₂,
 temperature). Phones get a fixed bottom tab bar; desktop recomposes the same

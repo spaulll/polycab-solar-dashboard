@@ -24,6 +24,7 @@ import { initTheme } from './theme.js';
 import { applyChartTheme } from './charts.js';
 import { VIEWS, initRouter, navigate } from './router.js';
 import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
+import { initGauge, updateGauge, dimGauge } from './gauge.js';
 import { initSegmented } from './segmented.js';
 import { toast } from './toast.js';
 import { initPullToRefresh } from './pullRefresh.js';
@@ -201,6 +202,8 @@ async function loadInitialStatus(){
     if(json.last_reading){
       updateStatCards(json.last_reading);
       dimStatCards(json.night_mode);
+      updateGauge(json.last_reading.Inverter_Power);
+      dimGauge(json.night_mode);
       setLastUpdated(json.last_reading.timestamp);
     }
     if(json.sun){
@@ -223,6 +226,8 @@ function handleWSMessage(msg){
     if(msg.last_reading){
       updateStatCards(msg.last_reading);
       dimStatCards(msg.night_mode);
+      updateGauge(msg.last_reading.Inverter_Power);
+      dimGauge(msg.night_mode);
       setLastUpdated(msg.last_reading.timestamp);
       updateCurrentTemp(msg.last_reading.Temperature);
     }
@@ -243,6 +248,7 @@ function handleWSMessage(msg){
     setMode(false);
     dimStatCards(false);
     updateStatCards(msg.data);
+    updateGauge(msg.data.Inverter_Power);
     pushAndRender(msg.data);
     setLastUpdated(msg.data.timestamp);
     updateCurrentTemp(msg.data.Temperature);
@@ -264,6 +270,7 @@ function handleWSMessage(msg){
   else if(msg.type === 'night_mode'){
     setMode(true);
     dimStatCards(true);
+    dimGauge(true);
     setNightText(`Inverter is asleep. Resuming in ~${(msg.seconds_until_sunrise/3600).toFixed(1)}h.`);
     refreshSunInfo();
     setInverterStatus('night');
@@ -273,6 +280,7 @@ function handleWSMessage(msg){
   else if(msg.type === 'wake_up'){
     setMode(false);
     dimStatCards(false);
+    dimGauge(false);
     setNightText(NIGHT_TEXT_DEFAULT);
     refreshSunInfo();
     // Next poll (seconds away) confirms online vs offline via reading/error.
@@ -425,6 +433,8 @@ function refreshLive(){
       b.addEventListener('click', () => navigate(b.dataset.nav)));
     initRouter(applyView);
     initTiles();
+    // Live output gauge: build the SVG dial (needs no data to render).
+    initGauge();
     // Sliding indicators for every range toggle (visual only).
     initSegmented();
     // Theme next: charts read the active palette at creation and on change.
