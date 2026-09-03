@@ -295,13 +295,33 @@
 
     <aside class="col-side">
 
-      <!-- Live output gauge -->
-      <div class="panel gauge-panel" id="gaugePanel">
-        <div class="panel-body gauge-body">
-          <div class="gauge-dial" id="gaugeDial"></div>
-          <div class="gauge-readout">
-            <p class="gauge-watts"><span class="num" id="gaugeValue">–</span><span class="unit">W</span></p>
-            <p class="gauge-rate" id="gaugeRate">&nbsp;</p>
+      <!-- Live output: gauge + mood side by side -->
+      <div class="gauge-row">
+        <div class="panel gauge-panel" id="gaugePanel">
+          <div class="panel-body gauge-body">
+            <div class="gauge-dial" id="gaugeDial"></div>
+            <div class="gauge-readout">
+              <p class="gauge-watts"><span class="num" id="gaugeValue">–</span><span class="unit">W</span></p>
+              <p class="gauge-rate" id="gaugeRate">&nbsp;</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel mood-panel" id="gaugeMoodPanel">
+          <div class="panel-body mood-body">
+            <div class="mood-sky" aria-hidden="true">
+              <div class="mood-halo"></div>
+              <div class="mood-stars"></div>
+              <div class="mood-sun">
+                <div class="mood-rays"></div>
+                <div class="mood-rays fast"></div>
+                <div class="mood-orb"></div>
+                <div class="mood-burst"><span></span><span></span></div>
+              </div>
+              <div class="mood-cloud"></div>
+              <div class="mood-horizon"></div>
+            </div>
+            <p class="mood-word sr-only" id="gaugeMoodWord">Resting</p>
+            <p class="mood-sub sr-only" id="gaugeMoodSub">&nbsp;</p>
           </div>
         </div>
       </div>

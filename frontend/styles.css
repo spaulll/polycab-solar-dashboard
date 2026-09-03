@@ -712,14 +712,15 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
   justify-content: space-between;
 }
 
-/* Live view only: the right stack (output gauge + Inverter Status) must top
-   out at EXACTLY the Power Over Time panel's height. Stretching the sidebar
-   to the row height lets the status panel (flex:1) absorb whatever slack the
-   compact gauge card leaves, so both columns share one bottom edge. The
-   gauge + status pair is deliberately built shorter than the chart panel's
-   fixed height (panel head + 320px chart + borders), so the row is always
-   sized by the chart column and the chart panel is never inflated. Scoped
-   to the desktop two-column grid; phones stack the columns naturally.
+/* Live view only: the right stack (gauge + mood row + Inverter Status)
+   must top out at EXACTLY the Power Over Time panel's height. Stretching
+   the sidebar to the row height lets the status panel (flex:1) absorb
+   whatever slack the compact gauge-row leaves, so both columns share one
+   bottom edge. The gauge-row + status pair is deliberately built shorter
+   than the chart panel's fixed height (panel head + 320px chart +
+   borders), so the row is always sized by the chart column and the chart
+   panel is never inflated. Scoped to the desktop two-column grid; phones
+   stack the columns naturally.
    (Generic .layout keeps align-items:start -- see the note above -- because
    the Trends/Insights sidebars may legitimately outgrow their charts.) */
 @media (min-width: 1021px){
@@ -1045,28 +1046,42 @@ select:hover{ color: var(--text); }
 .chart-msg.show{ display: grid; }
 
 /* ==========================================================================
-   Live output gauge — semicircular SVG speedometer + watts readout
+   Live output gauge + inverter mood — two balanced cards side by side
    ========================================================================== */
 
-/* Headless horizontal card (like the stat tiles): dial left, readout right.
-   Scoped under .col-side to out-rank the generic sidebar panel-body rule
-   (which stacks its children in a column) -- this body is a row. The SVG
+/* The old single horizontal gauge card (short + wide) is now a .gauge-row
+   of two square-ish panels: the semicircular dial stacked over its watts
+   readout, and an animated mood (emoji + word + capacity %) driven by the
+   same live watts in js/gauge.js. The row lives in the sidebar stack, so
+   its gap matches the column's. */
+.gauge-row{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+/* Vertical instrument card: dial on top, readout centered below. Scoped
+   under .col-side to out-rank the generic sidebar panel-body rule. The SVG
    itself is built by js/gauge.js; every color below is a theme custom
    property, so theme switches recolor the drawing with zero JS. */
 .col-side .gauge-body{
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  /* Generic panel-body padding; the card's extra height comes from the
-     bigger dial -- budgeted so the right stack's natural height stays under
-     the chart panel's fixed height (see the .layout-live stretch note). */
-  padding: var(--space-4);
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  /* Taller than the old horizontal card by design: paired with the mood
+     card it forms two balanced squares instead of one short wide strip.
+     Still budgeted so the right stack stays under the chart panel's fixed
+     height (see the .layout-live stretch note). */
+  padding: var(--space-2);
 }
 
 .gauge-dial{
-  width: 150px;
+  width: 100%;
+  max-width: 132px;
   flex: none;
 }
 
@@ -1123,14 +1138,14 @@ select:hover{ color: var(--text); }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
 }
 
 .gauge-watts{
   margin: 0;
   font-family: var(--mono);
-  font-size: var(--font-size-5);
+  font-size: var(--font-size-4);
   font-weight: 600;
   line-height: 1;
   color: var(--text);
@@ -1162,6 +1177,355 @@ select:hover{ color: var(--text); }
 .gauge-panel.dim .gauge-watts{
   color: var(--faint);
   transition: color 0.6s;
+}
+
+/* Inverter mood card: a pure-CSS sky scene (halo, sun/moon, rays, cloud,
+   stars, horizon) over the mood word + capacity sub. gauge.js sets
+   data-mood (sleeping|resting|waking|trickling|cruising|humming|peaking)
+   alongside data-level; every level-driven property cross-fades on long
+   transform/opacity transitions, while the ambient motion (ray spin, cloud
+   drift, star twinkle, burst rings) runs on independent layers — so
+   scrubbing power fast-forwards buttery smooth with zero popping, and
+   nothing is ever added or removed from the DOM. */
+.col-side .mood-body{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+  padding: var(--space-3);
+}
+
+/* Icon-only mood card: the word + sub stay in the DOM (screen readers,
+   tests, debug lab) but render off-screen. */
+.sr-only{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mood-sky{
+  position: relative;
+  width: 88px;
+  height: 72px;
+  flex: none;
+  transition: opacity 0.6s;
+}
+
+/* Soft glow behind the sun; breathes with output. One warm layer only —
+   at night it fades to nearly nothing so no color pop is possible. */
+.mood-halo{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78px;
+  height: 78px;
+  margin-top: -39px;
+  transform: translate(-50%, 0) scale(0.65);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-dim) 0%, transparent 65%);
+  opacity: 0.25;
+  transition: opacity 1s var(--ease-out), transform 1s var(--ease-out);
+}
+
+/* Night stars; twinkle runs forever, the layer cross-fades. */
+.mood-stars{
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+}
+
+.mood-stars::before{
+  content: "";
+  position: absolute;
+  left: 14%;
+  top: 12%;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--night);
+  box-shadow: 18px 8px 0 var(--night), 38px 0 var(--night),
+              58px 12px 0 var(--night), 30px 24px 0 var(--night);
+  animation: mood-twinkle 2.6s ease-in-out infinite;
+}
+
+@keyframes mood-twinkle{
+  0%, 100%{ opacity: 0.35; }
+  50%{ opacity: 1; }
+}
+
+/* The sun rides one mover so disc + rays + rings travel together with a
+   single smooth transition; the rays spin on their own layers inside. */
+.mood-sun{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translateY(6px) scale(0.72);
+  transition: transform 1.1s var(--ease-out);
+}
+
+.mood-orb{
+  position: absolute;
+  left: -17px;
+  top: -17px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.5;
+  transition: opacity 1s var(--ease-out), background-color 1s var(--ease-out),
+              box-shadow 1s var(--ease-out);
+}
+
+/* Crescent cutter: a panel-colored disc that slides over the sun at night.
+   Both position and opacity transition, so dusk melts into a moon. */
+.mood-orb::after{
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: var(--panel);
+  opacity: 0;
+  transform: translate(10px, -7px) scale(0.9);
+  transition: opacity 1s var(--ease-out), transform 1s var(--ease-out);
+}
+
+/* Ray rings: conic spokes masked to a band. Opacity cross-fades per level;
+   the spin itself never changes, so speed never jumps. */
+.mood-rays{
+  position: absolute;
+  left: -32px;
+  top: -32px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 5deg, transparent 5deg 45deg);
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 63%);
+  mask: radial-gradient(circle, transparent 62%, #000 63%);
+  opacity: 0;
+  animation: mood-rays-spin 18s linear infinite;
+  transition: opacity 1s var(--ease-out);
+}
+
+/* Second counter-rotating band fades in at high output — reads as faster
+   spin without ever retiming an animation. */
+.mood-rays.fast{
+  animation-direction: reverse;
+  animation-duration: 11s;
+  -webkit-mask: radial-gradient(circle, transparent 52%, #000 53%);
+  mask: radial-gradient(circle, transparent 52%, #000 53%);
+}
+
+@keyframes mood-rays-spin{
+  to{ transform: rotate(360deg); }
+}
+
+/* Expanding rings, visible only at peaking; the wrapper cross-fades. */
+.mood-burst{
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  transition: opacity 1s var(--ease-out);
+}
+
+.mood-burst span{
+  position: absolute;
+  left: -18px;
+  top: -18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-line);
+  opacity: 0;
+  animation: mood-burst 2.8s var(--ease-out) infinite;
+}
+
+.mood-burst span:last-child{ animation-delay: 1.4s; }
+
+@keyframes mood-burst{
+  0%{ transform: scale(0.6); opacity: 0.7; }
+  100%{ transform: scale(2); opacity: 0; }
+}
+
+/* Low-output overcast: drifts forever, cross-fades away as the sky clears. */
+.mood-cloud{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin-top: 10px;
+  width: 44px;
+  height: 12px;
+  margin-left: -22px;
+  opacity: 0.9;
+  animation: mood-cloud-drift 7s ease-in-out infinite alternate;
+  transition: opacity 1s var(--ease-out);
+}
+
+.mood-cloud::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--steel);
+}
+
+.mood-cloud::after{
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--steel);
+  box-shadow: 14px 3px 0 -1px var(--steel);
+}
+
+@keyframes mood-cloud-drift{
+  from{ transform: translateX(-6px); }
+  to{ transform: translateX(6px); }
+}
+
+.mood-horizon{
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 1px;
+  background: var(--line-strong);
+  opacity: 0;
+}
+
+/* ---- Per-mood states: only opacity / transform / color shift here ---- */
+
+.mood-panel[data-mood="sleeping"] .mood-sun{ transform: translateY(2px) scale(0.94); }
+.mood-panel[data-mood="sleeping"] .mood-orb{ opacity: 1; background: var(--night); box-shadow: 0 0 12px 1px var(--night); }
+.mood-panel[data-mood="sleeping"] .mood-orb::after{ opacity: 1; transform: translate(7px, -5px) scale(0.88); }
+.mood-panel[data-mood="sleeping"] .mood-rays,
+.mood-panel[data-mood="sleeping"] .mood-rays.fast{ opacity: 0; }
+.mood-panel[data-mood="sleeping"] .mood-halo{ opacity: 0.12; transform: translate(-50%, 0) scale(0.7); }
+.mood-panel[data-mood="sleeping"] .mood-stars{ opacity: 1; }
+.mood-panel[data-mood="sleeping"] .mood-cloud{ opacity: 0; }
+.mood-panel[data-mood="sleeping"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="resting"] .mood-sun{ transform: translateY(6px) scale(0.72); }
+.mood-panel[data-mood="resting"] .mood-orb{ opacity: 0.5; box-shadow: none; }
+.mood-panel[data-mood="resting"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="resting"] .mood-rays,
+.mood-panel[data-mood="resting"] .mood-rays.fast{ opacity: 0; }
+.mood-panel[data-mood="resting"] .mood-halo{ opacity: 0.25; transform: translate(-50%, 0) scale(0.65); }
+.mood-panel[data-mood="resting"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="resting"] .mood-cloud{ opacity: 0.9; }
+.mood-panel[data-mood="resting"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="waking"] .mood-sun{ transform: translateY(3px) scale(0.85); }
+.mood-panel[data-mood="waking"] .mood-orb{ opacity: 0.9; box-shadow: 0 0 8px 1px var(--accent-line); }
+.mood-panel[data-mood="waking"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="waking"] .mood-rays{ opacity: 0.35; }
+.mood-panel[data-mood="waking"] .mood-rays.fast{ opacity: 0; }
+.mood-panel[data-mood="waking"] .mood-halo{ opacity: 0.4; transform: translate(-50%, 0) scale(0.78); }
+.mood-panel[data-mood="waking"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="waking"] .mood-cloud{ opacity: 0.65; }
+.mood-panel[data-mood="waking"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="trickling"] .mood-sun{ transform: translateY(1px) scale(0.92); }
+.mood-panel[data-mood="trickling"] .mood-orb{ opacity: 1; box-shadow: 0 0 10px 1px var(--accent-line); }
+.mood-panel[data-mood="trickling"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="trickling"] .mood-rays{ opacity: 0.55; }
+.mood-panel[data-mood="trickling"] .mood-rays.fast{ opacity: 0; }
+.mood-panel[data-mood="trickling"] .mood-halo{ opacity: 0.5; transform: translate(-50%, 0) scale(0.88); }
+.mood-panel[data-mood="trickling"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="trickling"] .mood-cloud{ opacity: 0.45; }
+.mood-panel[data-mood="trickling"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="cruising"] .mood-sun{ transform: translateY(-1px) scale(1); }
+.mood-panel[data-mood="cruising"] .mood-orb{ opacity: 1; box-shadow: 0 0 12px 1px var(--accent-line); }
+.mood-panel[data-mood="cruising"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="cruising"] .mood-rays{ opacity: 0.8; }
+.mood-panel[data-mood="cruising"] .mood-rays.fast{ opacity: 0; }
+.mood-panel[data-mood="cruising"] .mood-halo{ opacity: 0.55; transform: translate(-50%, 0) scale(0.95); }
+.mood-panel[data-mood="cruising"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="cruising"] .mood-cloud{ opacity: 0; }
+.mood-panel[data-mood="cruising"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="humming"] .mood-sun{ transform: translateY(-3px) scale(1.07); }
+.mood-panel[data-mood="humming"] .mood-orb{ opacity: 1; box-shadow: 0 0 16px 2px var(--accent-line); }
+.mood-panel[data-mood="humming"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="humming"] .mood-rays{ opacity: 0.9; }
+.mood-panel[data-mood="humming"] .mood-rays.fast{ opacity: 0.45; }
+.mood-panel[data-mood="humming"] .mood-halo{ opacity: 0.75; transform: translate(-50%, 0) scale(1.05); }
+.mood-panel[data-mood="humming"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="humming"] .mood-cloud{ opacity: 0; }
+.mood-panel[data-mood="humming"] .mood-burst{ opacity: 0; }
+
+.mood-panel[data-mood="peaking"] .mood-sun{ transform: translateY(-5px) scale(1.14); }
+.mood-panel[data-mood="peaking"] .mood-orb{ opacity: 1; box-shadow: 0 0 20px 3px var(--accent-line); }
+.mood-panel[data-mood="peaking"] .mood-orb::after{ opacity: 0; }
+.mood-panel[data-mood="peaking"] .mood-rays{ opacity: 1; }
+.mood-panel[data-mood="peaking"] .mood-rays.fast{ opacity: 1; }
+.mood-panel[data-mood="peaking"] .mood-halo{ opacity: 0.9; transform: translate(-50%, 0) scale(1.18); }
+.mood-panel[data-mood="peaking"] .mood-stars{ opacity: 0; }
+.mood-panel[data-mood="peaking"] .mood-cloud{ opacity: 0; }
+.mood-panel[data-mood="peaking"] .mood-burst{ opacity: 1; }
+
+.mood-word{
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  letter-spacing: 0.01em;
+  transition: color 0.5s var(--ease-out);
+}
+
+/* Word change cue: gauge.js re-triggers this fade-rise whenever the mood
+   word itself flips, so text swaps glide instead of popping. */
+.mood-word.swap{ animation: mood-word-in 0.5s var(--ease-out); }
+
+@keyframes mood-word-in{
+  from{ opacity: 0; transform: translateY(5px); }
+  to{ opacity: 1; transform: none; }
+}
+
+/* Capacity sub under the mood word; height always reserved like the gauge
+   rate line so swapping moods never reflows the card. */
+.mood-sub{
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--font-size-2);
+  line-height: 1.2;
+  color: var(--faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mood-sub.active{ color: var(--dim); }
+
+.mood-panel.dim .mood-sky{
+  opacity: 0.5;
+}
+
+.mood-panel.dim .mood-word{
+  color: var(--faint);
+  transition: color 0.6s;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .mood-sky, .mood-sky *{ animation: none !important; transition: none !important; }
 }
 
 /* ==========================================================================
@@ -1979,8 +2343,11 @@ footer{
   .stat-card{ padding: 12px 14px; }
   .stat-value{ font-size: 20px; }
 
-  /* --- Output gauge: trim the dial so label + readout keep one line --- */
-  .gauge-dial{ width: 120px; }
+  /* --- Output gauge + mood: keep the pair side by side, just cap the
+         dial and shrink the sky so both squares fit 320px --- */
+  .gauge-row{ gap: 12px; }
+  .gauge-dial{ max-width: 120px; }
+  .mood-sky{ width: 80px; height: 66px; }
 
   /* --- Gen strip: 2-up with the 5th card (This Year) taking the full
          row below, so no cell is ever empty; wide card follows full-width */
@@ -2006,5 +2373,6 @@ footer{
   .stat-card{ padding: 11px 12px; }
   .stat-value{ font-size: 18px; }
   .gen-card{ padding: 11px 12px; }
-  .gauge-dial{ width: 100px; }
+  .gauge-dial{ max-width: 104px; }
+  .mood-sky{ width: 72px; height: 60px; }
 }
