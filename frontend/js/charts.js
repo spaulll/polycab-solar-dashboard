@@ -26,14 +26,28 @@ import { prefersReducedMotion } from './motion.js';
 const el = id => document.getElementById(id);
 
 // Dataset entry animation for range switches: the live-append path always
-// updates with 'none', but a fresh dataset may slide in once.
+// updates with 'none', but a fresh dataset glides in once with a soft
+// quart ease — premium entry, instant live ticks.
 function animatedUpdate(chart){
   const prev = chart.options.animation?.duration ?? 0;
+  const prevEasing = chart.options.animation?.easing;
   if(!prefersReducedMotion()){
-    chart.options.animation.duration = 300;
+    chart.options.animation.duration = 550;
+    chart.options.animation.easing = 'easeOutQuart';
   }
   chart.update();
-  setTimeout(() => { chart.options.animation.duration = prev; }, 350);
+  setTimeout(() => {
+    chart.options.animation.duration = prev;
+    if(prevEasing !== undefined) chart.options.animation.easing = prevEasing;
+  }, 600);
+}
+
+// Honest durations for ambient charts: buttery on entry, silent when the
+// user asked for reduced motion. Evaluated once at creation; the live
+// power chart keeps duration 0 separately so WS ticks never jank.
+function ambientAnim(ms = 450){
+  if(prefersReducedMotion()) return { duration: 0 };
+  return { duration: ms, easing: 'easeOutQuart' };
 }
 
 const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
@@ -832,7 +846,7 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 150 },
+    animation: ambientAnim(),
     plugins: { legend: { display: false } },
     scales: {
       x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
@@ -875,7 +889,7 @@ const cumulativeChart = new Chart(el('cumulativeChart').getContext('2d'), {
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 150 },
+    animation: ambientAnim(),
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
@@ -966,7 +980,7 @@ const monthlyChart = new Chart(el('monthlyChart').getContext('2d'), {
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 150 },
+    animation: ambientAnim(),
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
@@ -1209,7 +1223,7 @@ const tempChart = new Chart(el('tempChart').getContext('2d'), {
   options: {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 150 },
+    animation: ambientAnim(),
     interaction: { mode: 'nearest', axis: 'x', intersect: false },
     plugins: {
       legend: {
@@ -1475,7 +1489,7 @@ function buildWeatherChart(){
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 150 },
+        animation: ambientAnim(),
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1534,7 +1548,7 @@ function buildWeatherChart(){
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 150 },
+        animation: ambientAnim(),
         interaction: { mode: 'nearest', intersect: true },
         plugins: {
           legend: { display: false },

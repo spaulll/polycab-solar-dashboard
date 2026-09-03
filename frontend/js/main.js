@@ -27,6 +27,7 @@ import { initTiles, pushAndRender, seedFromReadings } from './tiles.js';
 import { initGauge, updateGauge, dimGauge } from './gauge.js';
 import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
+import { initReveals } from './motion.js';
 import { toast } from './toast.js';
 import { initPullToRefresh } from './pullRefresh.js';
 
@@ -446,6 +447,8 @@ function refreshLive(){
     initGauge();
     // Sliding indicators for every range toggle (visual only).
     initSegmented();
+    // Scroll reveals + entrance choreography gate (progressive enhancement).
+    initReveals();
     // Theme next: charts read the active palette at creation and on change.
     initTheme(applyChartTheme);
   // Saved tab selections next, strictly before any data fetch: the initial

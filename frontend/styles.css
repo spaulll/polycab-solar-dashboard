@@ -2376,3 +2376,404 @@ footer{
   .gauge-dial{ max-width: 104px; }
   .mood-sky{ width: 72px; height: 60px; }
 }
+
+/* ==========================================================================
+   Premium motion layer — buttery, clean, transform/opacity-only
+   --------------------------------------------------------------------------
+   One easing language everywhere: enter with --ease-out (decelerate in),
+   leave fast, spring only for small affirmative pops (tab select, toast,
+   sheet). Every keyframe below is gated by prefers-reduced-motion at the
+   end of this layer. Stagger delays make view switches read as one
+   choreographed rise instead of six boxes blinking on.
+   ========================================================================== */
+
+:root{
+  --dur-xs: 0.12s;
+  --dur-xl: 0.6s;
+  --dur-xxl: 0.9s;
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring-soft: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --lift-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --stagger: 0.06s;
+}
+
+[data-theme="light"]{
+  --lift-shadow: 0 14px 30px rgba(48, 39, 28, 0.16), 0 3px 10px rgba(48, 39, 28, 0.10);
+}
+
+::selection{
+  background: var(--accent-dim);
+}
+
+html{ scroll-behavior: smooth; }
+
+/* ---------- Keyframes ---------- */
+@keyframes rise-in{
+  from{ opacity: 0; transform: translateY(14px) scale(0.992); }
+  to{ opacity: 1; transform: none; }
+}
+
+@keyframes dock-in{
+  from{ opacity: 0; transform: translateX(-50%) translateY(18px) scale(0.96); }
+  to{ opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@keyframes banner-in{
+  from{ opacity: 0; transform: translateY(-8px) scale(0.99); }
+  to{ opacity: 1; transform: none; }
+}
+
+@keyframes tab-pop{
+  0%{ transform: scale(0.82); }
+  60%{ transform: scale(1.08); }
+  100%{ transform: scale(1); }
+}
+
+@keyframes dot-ping{
+  0%{ transform: scale(0.6); opacity: 0.8; }
+  70%{ transform: scale(1.9); opacity: 0; }
+  100%{ transform: scale(1.9); opacity: 0; }
+}
+
+@keyframes num-pop{
+  0%{ transform: translateY(3px); opacity: 0.4; }
+  100%{ transform: none; opacity: 1; }
+}
+
+@keyframes spark-draw{
+  from{ stroke-dashoffset: 220; opacity: 0; }
+  to{ stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes chart-in{
+  from{ opacity: 0; transform: translateY(8px); }
+  to{ opacity: 1; transform: none; }
+}
+
+@keyframes sheet-item-in{
+  from{ opacity: 0; transform: translateY(10px); }
+  to{ opacity: 1; transform: none; }
+}
+
+@keyframes toast-spring-in{
+  0%{ opacity: 0; transform: translateX(18px) scale(0.96); }
+  60%{ opacity: 1; transform: translateX(-3px) scale(1.005); }
+  100%{ opacity: 1; transform: none; }
+}
+
+@keyframes brand-spin{
+  to{ transform: rotate(360deg); }
+}
+
+@keyframes live-flash{
+  0%{ opacity: 0; }
+  25%{ opacity: 1; }
+  100%{ opacity: 0; }
+}
+
+@keyframes bar-sheen{
+  from{ transform: translateX(-100%); }
+  to{ transform: translateX(220%); }
+}
+
+/* ---------- Initial page choreography ---------- */
+.topbar{ animation: rise-in var(--dur-xl) var(--ease-enter) both; }
+
+.live-hero .sun-arc-card{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay: 0.05s; }
+
+/* View switches replay one coordinated rise; children stagger behind it. */
+.view.active{ animation: none; }
+
+.view.active .sun-arc-card,
+.view.active .stats .stat-card,
+.view.active .gen-strip .gen-card,
+.view.active .layout .panel,
+.view.active .night-banner.show{
+  animation: rise-in var(--dur-xl) var(--ease-enter) both;
+}
+
+/* Live view stagger: dial -> tiles left-to-right -> chart/side stack */
+.view.active[data-view="live"] .stats .stat-card:nth-child(1){ animation-delay: 0.08s; }
+.view.active[data-view="live"] .stats .stat-card:nth-child(2){ animation-delay: 0.14s; }
+.view.active[data-view="live"] .stats .stat-card:nth-child(3){ animation-delay: 0.20s; }
+.view.active[data-view="live"] .stats .stat-card:nth-child(4){ animation-delay: 0.26s; }
+.view.active[data-view="live"] .stats .stat-card:nth-child(5){ animation-delay: 0.32s; }
+.view.active[data-view="live"] .stats .stat-card:nth-child(6){ animation-delay: 0.38s; }
+.view.active[data-view="live"] .layout .col-main .panel{ animation-delay: 0.30s; }
+.view.active[data-view="live"] .layout .col-side .gauge-row{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay: 0.36s; }
+.view.active[data-view="live"] .layout .col-side .panel-status{ animation-delay: 0.42s; }
+
+/* Trends / Insights stagger */
+.view.active[data-view="trends"] .gen-card:nth-child(1){ animation-delay: 0.04s; }
+.view.active[data-view="trends"] .gen-card:nth-child(2){ animation-delay: 0.10s; }
+.view.active[data-view="trends"] .gen-card:nth-child(3){ animation-delay: 0.16s; }
+.view.active[data-view="trends"] .gen-card:nth-child(4){ animation-delay: 0.22s; }
+.view.active[data-view="trends"] .gen-card:nth-child(5){ animation-delay: 0.28s; }
+.view.active[data-view="trends"] .gen-card:nth-child(6){ animation-delay: 0.34s; }
+.view.active[data-view="trends"] .col-main .panel:nth-child(1){ animation-delay: 0.24s; }
+.view.active[data-view="trends"] .col-main .panel:nth-child(2){ animation-delay: 0.32s; }
+.view.active[data-view="trends"] .col-side .panel:nth-child(1){ animation-delay: 0.38s; }
+.view.active[data-view="trends"] .col-side .panel:nth-child(2){ animation-delay: 0.44s; }
+.view.active[data-view="insights"] .col-main .panel:nth-child(1){ animation-delay: 0.08s; }
+.view.active[data-view="insights"] .col-main .panel:nth-child(2){ animation-delay: 0.16s; }
+.view.active[data-view="insights"] .col-side .panel:nth-child(1){ animation-delay: 0.24s; }
+.view.active[data-view="insights"] .col-side .panel:nth-child(2){ animation-delay: 0.32s; }
+
+footer{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay: 0.5s; }
+
+/* Floating dock floats up once, then idles. */
+.tabbar{ animation: dock-in var(--dur-xl) var(--ease-enter) both; animation-delay: 0.45s; }
+
+/* ---------- Card hover: quiet lift (fine pointers only) ---------- */
+.panel,
+.stat-card,
+.gen-card,
+.sun-arc-card{
+  transition: transform var(--dur-med) var(--ease-enter),
+              box-shadow var(--dur-med) var(--ease-enter),
+              border-color var(--dur-med) ease,
+              background-color var(--dur-med) ease;
+}
+
+@media (hover: hover){
+  .panel:hover,
+  .sun-arc-card:hover{
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+    box-shadow: var(--lift-shadow);
+  }
+  .stat-card:hover,
+  .gen-card:hover{
+    transform: translateY(-2px);
+    border-color: var(--line-strong);
+  }
+  .stat-card:hover .spark{ opacity: 0.55; }
+  .stat-card.solar:hover::before{ width: 30px; }
+}
+
+.stat-card::before{ transition: width var(--dur-med) var(--ease-enter), opacity var(--dur-med) ease; }
+.stat-card .spark{ transition: opacity var(--dur-med) ease; }
+
+/* Brand sun: a slow, deliberate turn on hover — never idle motion. */
+.brand-mark{ transition: transform var(--dur-xl) var(--ease-enter), color var(--dur-med) ease; }
+@media (hover: hover){
+  .brand:hover .brand-mark{ transform: rotate(90deg); }
+}
+
+/* ---------- Controls: buttery press + slide ---------- */
+.range-toggle button,
+.tabbar button,
+.btn,
+.weather-chip,
+.theme-toggle,
+.err-pill{
+  transition: transform var(--dur-fast) var(--ease-spring-soft),
+              color var(--dur-fast) ease,
+              background-color var(--dur-fast) ease,
+              border-color var(--dur-fast) ease,
+              box-shadow var(--dur-fast) ease;
+}
+
+@media (hover: hover){
+  .btn:hover{ transform: translateY(-1px); box-shadow: var(--lift-shadow); }
+  .weather-chip:hover{ transform: translateY(-1px); }
+  .theme-toggle:hover{ transform: translateY(-1px); }
+  .err-pill:hover{ transform: translateY(-1px); }
+  .tabbar button:hover{ transform: translateY(-1px); }
+}
+
+.seg-ind{
+  transition: transform 0.38s var(--ease-spring-soft), width 0.38s var(--ease-enter);
+  will-change: transform, width;
+}
+
+/* Active tab icon pops once when selected. */
+.tabbar button.active svg{ animation: tab-pop 0.42s var(--ease-spring-soft); transform-origin: center; }
+
+/* Theme icons: slower, springier morph. */
+.theme-toggle svg{ transition: opacity 0.45s ease, transform 0.5s var(--ease-spring-soft); }
+
+/* ---------- Status dots: breathing ping ---------- */
+.dot{ position: relative; transition: background-color var(--dur-med) ease; }
+.dot.live::after,
+.dot.down::after{
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  pointer-events: none;
+}
+.dot.live{ color: var(--ok); }
+.dot.live::after{ animation: dot-ping 2.6s var(--ease-enter) infinite; }
+.dot.down{ color: var(--err); }
+.dot.down::after{ animation: dot-ping 1.8s var(--ease-enter) infinite; }
+
+/* Inverter status word cross-fades between states. */
+.inv-status-value{ transition: color var(--dur-med) ease, opacity var(--dur-med) ease; }
+.inv-status-row .dot{ transition: background-color var(--dur-med) ease, transform var(--dur-med) var(--ease-spring-soft); }
+
+/* Night banner glides down instead of blinking on. */
+.night-banner.show{ animation: banner-in var(--dur-med) var(--ease-enter) both; }
+.night-banner .moon{ animation: mood-twinkle 3s ease-in-out infinite; }
+
+/* ---------- Live value ticks: gentle rise on fresh numbers ---------- */
+.num.tick{ display: inline-block; animation: num-pop 0.45s var(--ease-enter); }
+
+/* Fresh-reading flash: a soft accent wash sweeping the card edge. */
+.stat-card,
+.gen-card{
+  position: relative;
+}
+.stat-card.live-tick::after,
+.gen-card.live-tick::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, transparent 30%, var(--accent-dim) 50%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  animation: live-flash 0.7s var(--ease-enter);
+}
+
+/* ---------- Gauge: spring needle, silk fill ---------- */
+.gauge-fill{ transition: stroke-dashoffset 0.8s var(--ease-spring-soft); }
+.gauge-needle{ transition: transform 0.8s var(--ease-spring-soft); will-change: transform; }
+.gauge-panel.dim .gauge-dial svg,
+.gauge-panel.dim .gauge-watts,
+.mood-panel.dim .mood-word{ transition: opacity var(--dur-xl) ease, color var(--dur-xl) ease; }
+
+/* ---------- Sparklines draw in; charts settle ---------- */
+.spark svg path{
+  stroke-dasharray: 220;
+  stroke-dashoffset: 0;
+}
+.spark svg path.draw{
+  stroke-dashoffset: 220;
+  animation: spark-draw 0.9s var(--ease-enter) forwards;
+}
+.view.active .chart-holder{ animation: chart-in var(--dur-xl) var(--ease-enter) both; animation-delay: 0.1s; }
+.chart-holder canvas{ transition: opacity var(--dur-med) ease; }
+
+/* ---------- Loss bar: spring width + travelling sheen ---------- */
+.loss-bar-fill{
+  position: relative;
+  transition: width 0.7s var(--ease-spring-soft);
+  overflow: hidden;
+}
+.loss-bar-fill::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.25), transparent);
+  transform: translateX(-100%);
+  animation: bar-sheen 3.2s var(--ease-enter) infinite;
+}
+
+/* ---------- Overlays: spring sheet + staggered rows ---------- */
+.weather-overlay{
+  transition: opacity 0.32s var(--ease-enter);
+}
+.weather-overlay.open .weather-card{
+  transition: transform 0.45s var(--ease-spring-soft), opacity 0.32s ease;
+}
+.weather-overlay.open .wf-item,
+.weather-overlay.open .weather-meta > div,
+.weather-overlay.open .err-item{
+  animation: sheet-item-in 0.5s var(--ease-enter) both;
+}
+.weather-overlay.open .wf-item:nth-child(1),
+.weather-overlay.open .weather-meta > div:nth-child(1),
+.weather-overlay.open .err-item:nth-child(1){ animation-delay: 0.08s; }
+.weather-overlay.open .wf-item:nth-child(2),
+.weather-overlay.open .weather-meta > div:nth-child(2),
+.weather-overlay.open .err-item:nth-child(2){ animation-delay: 0.13s; }
+.weather-overlay.open .wf-item:nth-child(3),
+.weather-overlay.open .weather-meta > div:nth-child(3),
+.weather-overlay.open .err-item:nth-child(3){ animation-delay: 0.18s; }
+.weather-overlay.open .weather-meta > div:nth-child(4){ animation-delay: 0.23s; }
+.weather-overlay.open .weather-meta > div:nth-child(5){ animation-delay: 0.28s; }
+.weather-overlay.open .weather-meta > div:nth-child(6){ animation-delay: 0.33s; }
+.weather-overlay.open .err-item:nth-child(n+4){ animation-delay: 0.23s; }
+.weather-card-icon svg{ transition: transform 0.5s var(--ease-spring-soft); }
+.weather-overlay.open .weather-card-icon svg{ animation: tab-pop 0.5s var(--ease-spring-soft); }
+
+/* ---------- Toasts: spring in, quick fade out ---------- */
+.toast{
+  transition: opacity 0.22s var(--ease-exit), transform 0.22s var(--ease-exit);
+}
+.toast.in{ animation: toast-spring-in 0.45s var(--ease-spring-soft); transform: none; opacity: 1; }
+.toast.out{
+  opacity: 0;
+  transform: translateX(12px) scale(0.98);
+  transition: opacity 0.2s var(--ease-exit), transform 0.2s var(--ease-exit);
+}
+
+/* ---------- Pull-to-refresh: springy hint ---------- */
+.pull-hint{
+  transition: opacity 0.25s ease, transform 0.35s var(--ease-spring-soft);
+}
+.pull-hint.show{ animation: banner-in 0.3s var(--ease-enter) both; }
+
+/* ---------- Scroll reveals (JS adds .reveal -> .in) ---------- */
+.js-anim .reveal{
+  opacity: 0;
+  transform: translateY(18px) scale(0.995);
+  transition: opacity var(--dur-xl) var(--ease-enter), transform var(--dur-xl) var(--ease-enter);
+  transition-delay: var(--reveal-delay, 0s);
+}
+.js-anim .reveal.in{
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Sun countdown: digits never jitter ---------- */
+.sun-countdown-value,
+.rail-value,
+.pc-count,
+.gauge-watts,
+.stat-value,
+.gen-value{
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- View Transitions API: soft crossfade ---------- */
+::view-transition-old(root),
+::view-transition-new(root){
+  animation-duration: 0.32s;
+  animation-timing-function: var(--ease-enter);
+}
+::view-transition-old(view),
+::view-transition-new(view){
+  animation-duration: 0.4s;
+  animation-timing-function: var(--ease-enter);
+}
+
+/* ---------- Reduced motion: everything collapses to instant ---------- */
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after{
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .view.active .sun-arc-card,
+  .view.active .stats .stat-card,
+  .view.active .gen-strip .gen-card,
+  .view.active .layout .panel,
+  .tabbar,
+  .topbar,
+  footer{ animation: none !important; opacity: 1 !important; transform: none !important; }
+  .dot.live::after,
+  .dot.down::after,
+  .loss-bar-fill::after,
+  .night-banner .moon{ animation: none !important; }
+  .js-anim .reveal{ opacity: 1; transform: none; }
+}

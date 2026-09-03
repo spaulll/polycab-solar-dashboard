@@ -6,6 +6,7 @@
 
 import { fetchGenerationStats } from './api.js';
 import { fmtEnergy } from './format.js';
+import { pop, swapText } from './motion.js';
 
 const el = id => document.getElementById(id);
 
@@ -19,23 +20,28 @@ let reqId = 0;
 
 function setEnergy(id, kwh){
   const parts = fmtEnergy(kwh);
-  el(id).innerHTML = parts ? parts[0] + unit(parts[1]) : '–';
+  const node = el(id);
+  const next = parts ? parts[0] + unit(parts[1]) : '–';
+  if(node.innerHTML === next) return;
+  const firstPaint = node.textContent.trim() === '–' || node.textContent.trim() === '';
+  node.innerHTML = next;
+  if(!firstPaint) pop(node);
 }
 
 function setDateLabel(id, day){
-  el(id).textContent = day
+  swapText(el(id), day
     ? new Date(day.date + 'T00:00:00').toLocaleDateString([], {
         weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
       })
-    : 'no data';
+    : 'no data');
 }
 
 function render(s){
   setEnergy('yieldAvg', s.average_daily_kwh);
   const total = fmtEnergy(s.total_kwh);
-  el('yieldMeta').textContent = s.days
+  swapText(el('yieldMeta'), s.days
     ? `${s.days} day${s.days === 1 ? '' : 's'} with data · ${total[0]} ${total[1]} total`
-    : 'no data in this range';
+    : 'no data in this range');
   setEnergy('yieldBest', s.best_day?.kwh);
   setDateLabel('yieldBestDate', s.best_day);
   setEnergy('yieldWorst', s.worst_day?.kwh);

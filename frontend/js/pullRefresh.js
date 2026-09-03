@@ -31,7 +31,17 @@ export function initPullToRefresh(onRefresh){
   }
 
   function reset(view){
-    if(view) view.style.transform = '';
+    if(view){
+      // Spring back instead of snapping: a short ease-out on the same
+      // transform the drag writes, then release it for the next gesture.
+      if(!prefersReducedMotion() && view.style.transform){
+        view.style.transition = 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)';
+        view.style.transform = '';
+        setTimeout(() => { view.style.transition = ''; }, 480);
+      }else{
+        view.style.transform = '';
+      }
+    }
     setHint('');
     startY = null;
     pulling = false;

@@ -8,6 +8,7 @@
 import { fetchTemperatureInsights } from './api.js';
 import { fmt } from './format.js';
 import { loadPref, savePref } from './prefs.js';
+import { swapText } from './motion.js';
 import { renderTemperature, setTemperatureView } from './charts.js';
 
 const el = id => document.getElementById(id);
@@ -35,15 +36,15 @@ function updateCurrentTemp(value){
   currentTempC = (typeof value === 'number' && !Number.isNaN(value))
     ? value
     : null;
-  el('tempNow').textContent = tempText(currentTempC);
+  swapText(el('tempNow'), tempText(currentTempC));
 }
 
 function renderStats(payload){
   const r = payload?.records ?? {};
 
   updateCurrentTemp(currentTempC); // re-render in case data arrived first
-  el('tempTodayMax').textContent = tempText(r.today_max);
-  el('tempRecord').textContent = tempText(r.all_time_max);
+  swapText(el('tempTodayMax'), tempText(r.today_max));
+  swapText(el('tempRecord'), tempText(r.all_time_max));
 
   // Record row tooltip: when the record fell + where each number comes from.
   const hd = r.hottest_day;

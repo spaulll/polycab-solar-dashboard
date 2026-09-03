@@ -57,9 +57,15 @@ function renderAll(){
   trim();
   for(const [key, holder] of holders){
     const pts = buffers.get(key).map(p => p.v);
-    holder.replaceChildren(
-      sparkline(pts, { width: 120, height: 34 })
-    );
+    const svg = sparkline(pts, { width: 120, height: 34 });
+    // First honest line per tile draws itself in; later live refreshes
+    // swap silently so the backdrop never strobes on every WS tick.
+    if(pts.length >= 2 && !holder._sparkDrawn){
+      holder._sparkDrawn = true;
+      const path = svg.querySelector('path');
+      if(path) path.classList.add('draw');
+    }
+    holder.replaceChildren(svg);
     holder.classList.toggle('empty', pts.length < 2);
   }
 }

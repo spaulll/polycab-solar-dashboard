@@ -4,7 +4,7 @@
 
 import { fmtTime } from './format.js';
 import { setNightMode } from './state.js';
-import { tweenNumber } from './motion.js';
+import { swapText, tweenNumber } from './motion.js';
 
 const el = id => document.getElementById(id);
 
@@ -57,12 +57,12 @@ function setConnText(text){
 function setMode(night){
   setNightMode(night);
   modeDot.className = 'dot ' + (night ? 'night' : 'live');
-  modeText.textContent = night ? 'night mode' : 'day mode';
+  swapText(modeText, night ? 'night mode' : 'day mode');
   nightBanner.classList.toggle('show', night);
 }
 
 function setNightText(text){
-  nightText.textContent = text;
+  swapText(nightText, text);
 }
 
 const NIGHT_TEXT_DEFAULT = 'Inverter is asleep. Waiting for sunrise…';
@@ -158,12 +158,13 @@ function tickOfflineTimer(){
  * status: 'online' | 'offline' | 'night'
  */
 function setInverterStatus(status, info = {}){
-  invStatusEl.textContent = INV_STATUS_LABELS[status] || '—';
+  const label = INV_STATUS_LABELS[status] || '—';
+  if(invStatusEl.textContent !== label) swapText(invStatusEl, label);
   invStatusEl.className = 'inv-status-value ' + (status || '');
   // Health dot reuses the shared pill dot states (live/down/night).
   invDot.className = 'dot ' + ({ online: 'live', offline: 'down', night: 'night' }[status] || '');
 
-  if(info.last_reading_at != null) invLastReading.textContent = fmtTime(info.last_reading_at);
+  if(info.last_reading_at != null) swapText(invLastReading, fmtTime(info.last_reading_at));
 
   if(status === 'offline' && info.offline_since){
     const parsed = Date.parse(info.offline_since);

@@ -4,15 +4,16 @@
 // reading) with its original record timestamp (see renderPeakInsight).
 
 import { fmt } from './format.js';
+import { swapText } from './motion.js';
 
 const el = id => document.getElementById(id);
 
 function computeInsights(readings){
   if(!readings || readings.length === 0){
-    el('insightLoss').textContent = '–%';
+    swapText(el('insightLoss'), '–%');
     el('lossBar').style.width = '0%';
-    el('insightAvg').textContent = '–';
-    el('insightSamples').textContent = '0 samples';
+    swapText(el('insightAvg'), '–');
+    swapText(el('insightSamples'), '0 samples');
     return;
   }
 
@@ -31,11 +32,11 @@ function computeInsights(readings){
   const avgPower = n ? sumPower / n : 0;
   const loss = avgSolar > 0 ? Math.max(0, (1 - (avgPower / avgSolar)) * 100) : 0;
 
-  el('insightLoss').textContent = fmt(loss, 1) + '%';
+  swapText(el('insightLoss'), fmt(loss, 1) + '%');
   el('lossBar').style.width = Math.min(100, loss).toFixed(0) + '%';
 
-  el('insightAvg').textContent = fmt(avgSolar, 0) + ' W';
-  el('insightSamples').textContent = n + ' samples';
+  swapText(el('insightAvg'), fmt(avgSolar, 0) + ' W');
+  swapText(el('insightSamples'), n + ' samples');
 }
 
 // Render the Peak Production insight from the server-computed raw-DB maximum.
@@ -43,14 +44,14 @@ function computeInsights(readings){
 // matches the actual stored reading regardless of the chart aggregation.
 function renderPeakInsight(peak){
   if(!peak || peak.value === null || peak.value === undefined){
-    el('insightPeakValue').textContent = '–';
-    el('insightPeakTime').textContent = 'no data';
+    swapText(el('insightPeakValue'), '–');
+    swapText(el('insightPeakTime'), 'no data');
     return;
   }
-  el('insightPeakValue').textContent = fmt(peak.value, 0) + ' W';
-  el('insightPeakTime').textContent = new Date(peak.timestamp).toLocaleString([], {
+  swapText(el('insightPeakValue'), fmt(peak.value, 0) + ' W');
+  swapText(el('insightPeakTime'), new Date(peak.timestamp).toLocaleString([], {
     month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
-  });
+  }));
 }
 
 export { computeInsights, renderPeakInsight };

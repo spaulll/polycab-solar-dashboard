@@ -115,7 +115,7 @@ function openPopup(){
 function closePopup(){
   overlay.classList.remove('open');
   pill.setAttribute('aria-expanded', 'false');
-  setTimeout(() => { overlay.hidden = true; }, 260); // match CSS fade-out
+  setTimeout(() => { overlay.hidden = true; }, 360); // match spring fade-out
 }
 
 pill.addEventListener('click', () => {

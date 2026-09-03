@@ -7,6 +7,7 @@
 
 import { fetchGenerationSummary } from './api.js';
 import { fmtEnergy, fmtMoney, fmtCO2 } from './format.js';
+import { swapText } from './motion.js';
 
 const el = id => document.getElementById(id);
 
@@ -21,24 +22,24 @@ function render(summary){
   panel.hidden = false;
 
   const cur = impact.currency || '';
-  el('impactLifetime').textContent = fmtMoney(impact.lifetime_inr, cur);
+  swapText(el('impactLifetime'), fmtMoney(impact.lifetime_inr, cur));
 
   // Basis line under the primary figure: what was generated and at which
   // rate -- savings are always kWh x current tariff, never stored history.
   const kwh = fmtEnergy(impact.lifetime_kwh);
-  el('impactBasis').textContent =
+  swapText(el('impactBasis'),
     (kwh ? `${kwh[0]} ${kwh[1]} generated` : 'lifetime') +
-    ` · @ ${cur}${Number(impact.tariff)}/kWh`;
+    ` · @ ${cur}${Number(impact.tariff)}/kWh`);
   el('impactPrimary').title =
     'Figures are estimated from generated energy × the current flat tariff ' +
     `(${cur}${Number(impact.tariff)}/kWh). Changing the tariff recomputes ` +
     'every figure — past rates are not stored.';
 
-  el('impactMonth').textContent = fmtMoney(impact.this_month_inr, cur);
-  el('impactYear').textContent = fmtMoney(impact.this_year_inr, cur);
+  swapText(el('impactMonth'), fmtMoney(impact.this_month_inr, cur));
+  swapText(el('impactYear'), fmtMoney(impact.this_year_inr, cur));
 
   const co2 = fmtCO2(impact.lifetime_co2_kg);
-  el('impactCO2').textContent = co2 ? `${co2[0]} ${co2[1]}` : '–';
+  swapText(el('impactCO2'), co2 ? `${co2[0]} ${co2[1]}` : '–');
 }
 
 async function loadImpact(){

@@ -10,7 +10,7 @@ import { SUN_COUNTDOWN_TICK_MS } from './config.js';
 import { fmtClock, fmtDuration } from './format.js';
 import { fetchSunInfo } from './api.js';
 import { svgEl } from './svg.js';
-import { prefersReducedMotion } from './motion.js';
+import { prefersReducedMotion, swapText } from './motion.js';
 
 const el = id => document.getElementById(id);
 
@@ -47,7 +47,7 @@ let animId = 0;
 let lastMode = null; // flips at dawn/dusk to trigger the sweep-in
 
 const polar = (r, a) => [CX + r * Math.cos(a), CY - r * Math.sin(a)];
-const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeOutCubic = t => 1 - Math.pow(1 - t, 4);
 
 function buildArc(){
   plot.replaceChildren();
@@ -176,9 +176,9 @@ function updateSunInfo(sun){
   daySunset = sun.sunset ? new Date(sun.sunset) : null;
   sunIsNight = !!sun.is_night;
 
-  el('sunNextSunrise').textContent = fmtClock(sun.next_sunrise);
-  el('sunNextSunset').textContent = fmtClock(sun.next_sunset);
-  el('sunCountdownLabel').textContent = sunIsNight ? 'Time to sunrise' : 'Time to sunset';
+  swapText(el('sunNextSunrise'), fmtClock(sun.next_sunrise));
+  swapText(el('sunNextSunset'), fmtClock(sun.next_sunset));
+  swapText(el('sunCountdownLabel'), sunIsNight ? 'Time to sunrise' : 'Time to sunset');
 
   tickSunCountdown(); // render immediately instead of waiting for next tick
 }
