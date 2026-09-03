@@ -202,11 +202,14 @@ async function loadInitialStatus(){
     setMode(json.night_mode);
     if(json.last_reading){
       updateStatCards(json.last_reading);
-      dimStatCards(json.night_mode);
       updateGauge(json.last_reading.Inverter_Power);
-      dimGauge(json.night_mode);
       setLastUpdated(json.last_reading.timestamp);
     }
+    // Dimming follows the mode flag, not data presence: at night the
+    // inverter is asleep so last_reading is null, yet the gauge must still
+    // park on sleeping (and the stats dim) instead of keeping boot state.
+    dimStatCards(json.night_mode);
+    dimGauge(json.night_mode);
     if(json.sun){
       updateSunInfo(json.sun);
     }
@@ -226,12 +229,14 @@ function handleWSMessage(msg){
     setMode(msg.night_mode);
     if(msg.last_reading){
       updateStatCards(msg.last_reading);
-      dimStatCards(msg.night_mode);
       updateGauge(msg.last_reading.Inverter_Power);
-      dimGauge(msg.night_mode);
       setLastUpdated(msg.last_reading.timestamp);
       updateCurrentTemp(msg.last_reading.Temperature);
     }
+    // Same as loadInitialStatus: dim on the mode flag even when the
+    // payload carries no reading (fresh server boot at night).
+    dimStatCards(msg.night_mode);
+    dimGauge(msg.night_mode);
     if(msg.sun){
       updateSunInfo(msg.sun);
     }
