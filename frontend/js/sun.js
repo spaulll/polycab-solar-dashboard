@@ -134,7 +134,7 @@ function buildArc(){
     fill: 'currentColor',
   });
   const moonG = svgEl('g', { class: 'sa-moon' }, [
-    svgEl('g', { transform: 'translate(-7.8 -7.8) scale(0.65)' }, [moonPath]),
+    svgEl('g', { transform: 'translate(-10.8 -10.8) scale(0.9)' }, [moonPath]),
   ]);
 
   const marker = svgEl('g', { class: 'sun-marker' }, [halo, sunG, moonG]);
