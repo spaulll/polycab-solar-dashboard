@@ -114,15 +114,15 @@ function buildArc(){
   // An inner .sa-scale group breathes with solar elevation (see draw()).
   const halo = svgEl('circle', { r: 17, fill: 'url(#sa-halo)', class: 'sun-halo' });
 
-  const core = svgEl('circle', { r: 7.5, fill: 'currentColor' });
+  const core = svgEl('circle', { r: 6, fill: 'currentColor' });
   const rays = svgEl('g', { class: 'sa-rays' });
   for(let i = 0; i < 8; i++){
     const a = (Math.PI * i) / 4;
     const c = Math.cos(a), s = Math.sin(a);
     rays.appendChild(svgEl('line', {
-      x1: (c * 10.5).toFixed(2), y1: (-s * 10.5).toFixed(2),
-      x2: (c * 14.5).toFixed(2), y2: (-s * 14.5).toFixed(2),
-      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round',
+      x1: (c * 8.5).toFixed(2), y1: (-s * 8.5).toFixed(2),
+      x2: (c * 11.5).toFixed(2), y2: (-s * 11.5).toFixed(2),
+      stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round',
     }));
   }
   const sunScale = svgEl('g', { class: 'sa-scale' }, [core, rays]);
@@ -134,7 +134,7 @@ function buildArc(){
     fill: 'currentColor',
   });
   const moonG = svgEl('g', { class: 'sa-moon' }, [
-    svgEl('g', { transform: 'translate(-9.6 -9.6) scale(0.8)' }, [moonPath]),
+    svgEl('g', { transform: 'translate(-7.8 -7.8) scale(0.65)' }, [moonPath]),
   ]);
 
   const marker = svgEl('g', { class: 'sun-marker' }, [halo, sunG, moonG]);
@@ -160,7 +160,7 @@ function draw(a){
   try{
     if(!prefersReducedMotion() && els.marker.style){
       const frac = Math.min(1, Math.max(0, 1 - a / Math.PI));
-      const boost = night ? 1 : 0.88 + 0.27 * Math.sin(Math.PI * frac);
+      const boost = night ? 1 : 0.85 + 0.25 * Math.sin(Math.PI * frac);
       els.marker.style.setProperty('--sa-s', boost.toFixed(3));
     }
   }catch(e){}
