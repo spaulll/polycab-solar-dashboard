@@ -162,8 +162,9 @@ function pop(el){
 function swapText(el, text){
   if(!el) return;
   const next = text ?? '–';
-  if(el.textContent === next) return;
-  const firstPaint = el.textContent.trim() === '–' || el.textContent.trim() === '';
+  const cur = el.textContent ?? '';
+  if(cur === next) return;
+  const firstPaint = cur.trim() === '–' || cur.trim() === '';
   el.textContent = next;
   if(!firstPaint) pop(el);
 }

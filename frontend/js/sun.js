@@ -108,10 +108,36 @@ function buildArc(){
     endDots.appendChild(svgEl('circle', { cx: x, cy: y, r: 4 }));
   }
 
-  // "Now" marker: soft glow halo + solid disc (halo pulses via CSS).
+  // "Now" marker: soft glow halo + a living sun/moon pair. The sun
+  // (core + slowly turning rays) shows by day, the crescent moon by
+  // night; CSS cross-fades/scales between them off .sun-marker.night.
+  // An inner .sa-scale group breathes with solar elevation (see draw()).
   const halo = svgEl('circle', { r: 17, fill: 'url(#sa-halo)', class: 'sun-halo' });
-  const disc = svgEl('circle', { r: 8.5, fill: 'currentColor' });
-  const marker = svgEl('g', { class: 'sun-marker' }, [halo, disc]);
+
+  const core = svgEl('circle', { r: 7.5, fill: 'currentColor' });
+  const rays = svgEl('g', { class: 'sa-rays' });
+  for(let i = 0; i < 8; i++){
+    const a = (Math.PI * i) / 4;
+    const c = Math.cos(a), s = Math.sin(a);
+    rays.appendChild(svgEl('line', {
+      x1: (c * 10.5).toFixed(2), y1: (-s * 10.5).toFixed(2),
+      x2: (c * 14.5).toFixed(2), y2: (-s * 14.5).toFixed(2),
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round',
+    }));
+  }
+  const sunScale = svgEl('g', { class: 'sa-scale' }, [core, rays]);
+  const sunG = svgEl('g', { class: 'sa-sun' }, [sunScale]);
+
+  // Crescent reuses the instrument moon glyph, centered on the marker.
+  const moonPath = svgEl('path', {
+    d: 'M18.6 15.1A8.2 8.2 0 0 1 8.9 5.4a8.2 8.2 0 1 0 9.7 9.7z',
+    fill: 'currentColor',
+  });
+  const moonG = svgEl('g', { class: 'sa-moon' }, [
+    svgEl('g', { transform: 'translate(-9.6 -9.6) scale(0.8)' }, [moonPath]),
+  ]);
+
+  const marker = svgEl('g', { class: 'sun-marker' }, [halo, sunG, moonG]);
 
   svg.append(wash, track, ticks, elapsed, endDots, marker);
   plot.appendChild(svg);
@@ -127,6 +153,17 @@ function draw(a){
   if(!els) return;
   const night = sunIsNight;
   els.marker.classList.toggle('night', night);
+  // Solar elevation breathes the sun's size: smallest at the horizon,
+  // fullest at mid-arc. Night parks it at 1 (hidden anyway). Linear
+  // 1s handoff matches the per-second tick glide; skipped for reduced
+  // motion so the glyph stays a stable size.
+  try{
+    if(!prefersReducedMotion() && els.marker.style){
+      const frac = Math.min(1, Math.max(0, 1 - a / Math.PI));
+      const boost = night ? 1 : 0.88 + 0.27 * Math.sin(Math.PI * frac);
+      els.marker.style.setProperty('--sa-s', boost.toFixed(3));
+    }
+  }catch(e){}
 
   if(night){
     els.wash.setAttribute('opacity', 0);

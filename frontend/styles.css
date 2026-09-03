@@ -333,7 +333,7 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
 
 .sun-arc-card.night .sun-arc-plot{ color: var(--night); }
 
-/* The halo breathes softly; the disc itself stays still. */
+/* The halo breathes softly; the sun/moon glyph rides inside it. */
 .sun-halo{
   transform-box: fill-box;
   transform-origin: center;
@@ -347,8 +347,48 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
   50%{ transform: scale(1.25); opacity: 0.7; }
 }
 
+/* Living marker: sun by day, crescent moon by night. The pair
+   cross-fades with a soft scale/turn so dusk and dawn melt instead of
+   popping; the ray ring turns slowly on its own layer. The inner
+   .sa-scale breathes with solar elevation via --sa-s (set per tick in
+   sun.js, 1s linear to match the marker glide). All motion is
+   transform/opacity-only and recolors through currentColor, so the day
+   accent / night tint swap comes free with the card. */
+.sa-sun,
+.sa-moon{
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+}
+
+.sun-marker .sa-sun{ opacity: 1; transform: scale(1) rotate(0deg); }
+.sun-marker .sa-moon{ opacity: 0; transform: scale(0.6) rotate(-40deg); }
+.sun-marker.night .sa-sun{ opacity: 0; transform: scale(0.6) rotate(40deg); }
+.sun-marker.night .sa-moon{ opacity: 1; transform: scale(1) rotate(0deg); }
+
+.sa-scale{
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(var(--sa-s, 1));
+  transition: transform 1s linear;
+}
+
+.sa-rays{
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sa-spin 26s linear infinite;
+}
+
+@keyframes sa-spin{
+  to{ transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce){
   .sun-halo{ animation: none; }
+  .sa-rays{ animation: none; }
+  .sa-sun,
+  .sa-moon,
+  .sa-scale{ transition: none; }
 }
 
 /* Countdown: the card's hero figure, sitting INSIDE the arch. The margin
