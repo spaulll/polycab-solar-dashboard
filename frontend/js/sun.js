@@ -167,7 +167,19 @@ function draw(a){
 
   if(night){
     els.wash.setAttribute('opacity', 0);
-    els.elapsed.setAttribute('opacity', 0);
+    // Night draws its own bold progress like day does: from the sunset
+    // end (right) along the top to the moon. Mirrored sweep flag (0)
+    // so the stroke travels over the arc, never underneath it.
+    const frac = a / Math.PI;
+    const [mx, my] = polar(R, a);
+    if(frac > 0.004){
+      els.elapsed.setAttribute('d',
+        `M ${(CX + R).toFixed(2)} ${CY} A ${R} ${R} 0 0 0 ${mx.toFixed(2)} ${my.toFixed(2)}`);
+      els.elapsed.setAttribute('opacity', 1);
+    }else{
+      els.elapsed.setAttribute('d', '');
+      els.elapsed.setAttribute('opacity', 0);
+    }
   }else{
     els.wash.setAttribute('opacity', 1);
     const frac = 1 - a / Math.PI;
