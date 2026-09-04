@@ -1,9 +1,30 @@
-// Today-at-a-glance mirror: copies the live stat cards + peak insight into
-// the premium summary card. No new data source; purely presentational so the
-// hero reads instantly on phones. All lookups are guarded -- if the source
-// element is missing the glance field keeps its placeholder.
+// Today-at-a-glance mirror: copies the live stat cards into the premium
+// summary card. Peak is pinned to TODAY via its own range=today fetch --
+// the Insights panel peak intentionally follows the shared chart range, but
+// "best today" must not move when the user browses 7D/All. All lookups are
+// guarded -- missing sources keep their placeholder.
+
+import { fetchPeakProduction } from './api.js';
 
 const $ = id => document.getElementById(id);
+
+// Today's own peak in watts (range-independent). Refreshed from the server;
+// live readings fold in instantly so new intraday highs show immediately.
+let todayPeakW = null;
+let lastPeakFetch = 0;
+const PEAK_REFRESH_MS = 5 * 60 * 1000;
+
+async function refreshTodayPeak(){
+  try{
+    const peak = await fetchPeakProduction('today');
+    if(peak && peak.value !== null && peak.value !== undefined){
+      const v = Number(peak.value);
+      if(Number.isFinite(v)) todayPeakW = v;
+    }
+  }catch(e){ /* keep the last known peak; fallback mirror below covers it */ }
+  lastPeakFetch = Date.now();
+  syncNumbers();
+}
 
 function text(id){
   const el = $(id);
@@ -42,17 +63,29 @@ function syncNumbers(){
       ? `${solar} W · ${today} kWh today` : '';
   }
 
-  const peak = splitPeak(text('insightPeakValue'));
-  if(peak){
-    setText('glancePeak', peak.num);
-    setText('glancePeakUnit', peak.unit);
+  // Peak: pinned to today. Live readings fold in instantly; the server
+  // value refreshes on a slow tick. Only if neither exists (offline boot),
+  // mirror the Insights peak as a last resort.
+  const nowW = parseNum(solar);
+  if(nowW !== null && (todayPeakW === null || nowW > todayPeakW)) todayPeakW = nowW;
+  if(todayPeakW !== null){
+    setText('glancePeak', String(Math.round(todayPeakW)));
+    setText('glancePeakUnit', 'W');
+  }else{
+    const peak = splitPeak(text('insightPeakValue'));
+    if(peak){
+      setText('glancePeak', peak.num);
+      setText('glancePeakUnit', peak.unit);
+    }
   }
 
-  // Progress bar: now relative to today's peak (honest, no extra fetch).
-  const nowW = parseNum(solar);
-  const peakRaw = text('insightPeakValue');
-  let peakW = parseNum(peakRaw);
-  if(peakW != null && /kW/i.test(peakRaw)) peakW *= 1000;
+  // Progress bar: now relative to today's peak.
+  let peakW = todayPeakW;
+  if(peakW === null){
+    const peakRaw = text('insightPeakValue');
+    peakW = parseNum(peakRaw);
+    if(peakW !== null && /kW/i.test(peakRaw)) peakW *= 1000;
+  }
   const fill = $('glanceFill');
   if(fill){
     let pct = 0;
@@ -94,6 +127,12 @@ export function initGlance(){
     const el = $(id);
     if(el) obs.observe(el, { childList: true, characterData: true, subtree: true });
   }
-  // Fallback tick in case a renderer replaces nodes wholesale.
-  setInterval(() => { syncNumbers(); syncState(); }, 5000);
+  // Fallback tick in case a renderer replaces nodes wholesale; the today
+  // peak refreshes on a slow tick alongside it.
+  setInterval(() => {
+    syncNumbers();
+    syncState();
+    if(Date.now() - lastPeakFetch > PEAK_REFRESH_MS) refreshTodayPeak();
+  }, 5000);
+  refreshTodayPeak();
 }
