@@ -3237,7 +3237,7 @@ footer{
 }
 /* Collapsible live readings: shut by default so the chart stays in view.
    The toggle carries a live mini-summary; the grid opens below it. */
-.stats-wrap{ margin-bottom: 16px; }
+.stats-wrap{ margin: 16px 0; }
 .stats{ margin-bottom: 0; }
 .stats[hidden]{ display: none; }
 .stats-toggle{
