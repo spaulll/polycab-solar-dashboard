@@ -1678,20 +1678,35 @@ function applyChartTheme(themeName){
     padding: 10,
   };
   // Spread keeps each chart's existing callbacks (power's are swapped per
-  // view; cumulative and monthly own fixed ones).
+  // view; cumulative and monthly own fixed ones). Weather may not exist yet
+  // (built lazily once archived weather arrives).
   Object.assign(powerChart.options.plugins.tooltip, tooltip);
+  Object.assign(dailyChart.options.plugins.tooltip, tooltip);
   Object.assign(cumulativeChart.options.plugins.tooltip, tooltip);
   Object.assign(monthlyChart.options.plugins.tooltip, tooltip);
   Object.assign(tempChart.options.plugins.tooltip, tooltip);
+  if(weatherChart) Object.assign(weatherChart.options.plugins.tooltip, tooltip);
 
   // Series colors live on the datasets; re-point them so bars/lines/fills
   // follow the theme without waiting for the next data render.
   dailyChart.data.datasets[0].backgroundColor = rgba(solarRgb, 0.8);
   cumulativeChart.data.datasets[0].borderColor = rgba(solarRgb, 0.9);
   cumulativeChart.data.datasets[0].backgroundColor = areaFill(solarRgb, 0.22);
-  // The dashed projection line derives from the live solar rgb too.
+  // Power lines bake their rgb at build time (including the gradient fill,
+  // which closes over it), so re-point them by metric: profile tags it,
+  // other views match by label. The dashed projection line derives from
+  // the live solar rgb too.
   for(const ds of powerChart.data.datasets){
-    if(ds.isTypical) ds.borderColor = rgba(solarRgb, TYPICAL_ALPHA);
+    if(ds.isTypical){
+      ds.borderColor = rgba(solarRgb, TYPICAL_ALPHA);
+      continue;
+    }
+    const isSolar = ds.metric
+      ? ds.metric === 'Solar Input'
+      : /solar/i.test(ds.label || '');
+    const rgb = isSolar ? solarRgb : inverterRgb;
+    ds.borderColor = rgba(rgb, 1);
+    if(ds.fill) ds.backgroundColor = areaFill(rgb);
   }
   // Monthly's per-bar alphas derive from the live rgb values, so rebuild.
   if(latestMonthly) rebuildMonthly();
