@@ -2753,11 +2753,15 @@ footer{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay
   transition: opacity 0.2s var(--ease-exit), transform 0.2s var(--ease-exit);
 }
 
-/* ---------- Pull-to-refresh: springy hint ---------- */
+/* ---------- Pull-to-refresh: springy hint (keeps its -50% centering) ---------- */
 .pull-hint{
   transition: opacity 0.25s ease, transform 0.35s var(--ease-spring-soft);
 }
-.pull-hint.show{ animation: banner-in 0.3s var(--ease-enter) both; }
+@keyframes pull-hint-in{
+  from{ opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to{ opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.pull-hint.show{ animation: pull-hint-in 0.3s var(--ease-enter) both; }
 
 /* ---------- Scroll reveals (JS adds .reveal -> .in) ---------- */
 .js-anim .reveal{
