@@ -50,8 +50,8 @@ function ambientAnim(ms = 450){
   return { duration: ms, easing: 'easeOutQuart' };
 }
 
-const SOLAR_RGB = '226,162,74';     // muted amber -- Solar Input
-const INVERTER_RGB = '147,167,186'; // desaturated steel -- Inverter Power
+const SOLAR_RGB = '242,184,75';     // premium amber -- Solar Input
+const INVERTER_RGB = '143,163,184'; // desaturated steel -- Inverter Power
 const rgba = (rgb, a) => `rgba(${rgb},${a})`;
 
 // Vertical alpha ramp behind filled areas (amber/steel family). Scriptable,
@@ -78,34 +78,34 @@ const CHART_THEMES = {
   dark: {
     solarRgb: SOLAR_RGB,
     inverterRgb: INVERTER_RGB,
-    text: '#9aa1a9',
+    text: '#a8b0bc',
     // rgb triplet of `text` above -- lets neutral series join rgba() alpha
     // blends (weather-impact "cloudy" class) without a new hue.
-    textRgb: '154,161,169',
-    grid: 'rgba(233,231,226,0.045)',
-    axisTitle: '#5f666e',
-    tooltipBg: '#191c20',
-    tooltipBorder: '#34383f',
-    tooltipTitle: '#e9e7e2',
-    tooltipBody: '#9aa1a9',
-    dayLine: 'rgba(233,231,226,0.12)',
-    dayLabel: '#9aa1a9',
+    textRgb: '168,176,188',
+    grid: 'rgba(244,242,237,0.06)',
+    axisTitle: '#6e7683',
+    tooltipBg: '#181d26',
+    tooltipBorder: 'rgba(255,255,255,0.15)',
+    tooltipTitle: '#f4f2ed',
+    tooltipBody: '#a8b0bc',
+    dayLine: 'rgba(244,242,237,0.14)',
+    dayLabel: '#a8b0bc',
   },
   light: {
     // Series match the CSS accents: bronze-amber solar, deep steel inverter
     // (kept cool on purpose against the warm paper surfaces).
-    solarRgb: '176,111,22',
-    inverterRgb: '82,112,140',
-    text: '#4d463e',
-    textRgb: '77,70,62',
-    grid: 'rgba(27,23,19,0.08)',
-    axisTitle: '#6f675b',
-    tooltipBg: '#fefdfb',
-    tooltipBorder: '#c2bbb1',
-    tooltipTitle: '#1b1713',
-    tooltipBody: '#4d463e',
-    dayLine: 'rgba(27,23,19,0.16)',
-    dayLabel: '#4d463e',
+    solarRgb: '180,83,9',
+    inverterRgb: '79,107,132',
+    text: '#5b544a',
+    textRgb: '91,84,74',
+    grid: 'rgba(25,21,17,0.08)',
+    axisTitle: '#8c8478',
+    tooltipBg: '#ffffff',
+    tooltipBorder: '#cfc6b8',
+    tooltipTitle: '#191511',
+    tooltipBody: '#5b544a',
+    dayLine: 'rgba(25,21,17,0.16)',
+    dayLabel: '#5b544a',
   },
 };
 
@@ -116,8 +116,8 @@ let themeColors = CHART_THEMES.dark;
 // ---------- Chart.js defaults ----------
 function setChartDefaults(c){
   Chart.defaults.color = c.text;
-  Chart.defaults.font.family = "ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
-  Chart.defaults.font.size = 11;
+  Chart.defaults.font.family = "'Inter', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace";
+  Chart.defaults.font.size = 12;
   // One tooltip skin for every chart: quiet panel card with hairline border.
   Chart.defaults.plugins.tooltip.cornerRadius = 6;
   Chart.defaults.plugins.tooltip.titleMarginBottom = 8;

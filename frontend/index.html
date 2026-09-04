@@ -19,6 +19,9 @@
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 <script src="/vendor/chart.umd.js"></script>
 <script src="/vendor/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -270,6 +273,35 @@
   <div class="layout layout-live">
 
     <section class="col-main">
+
+      <!-- Today at a glance: premium minimal summary (mirrors live stats) -->
+      <div class="panel glance-panel">
+        <div class="panel-head glance-head">
+          <div class="panel-head-main">
+            <h3 class="panel-title">Today at a glance</h3>
+            <p class="panel-subtitle" id="glanceSub">live summary</p>
+          </div>
+          <span class="glance-live"><span class="dot live" id="glanceDot"></span><span id="glanceState">Live</span></span>
+        </div>
+        <div class="glance-grid">
+          <div class="glance-item">
+            <span class="glance-label">Now</span>
+            <span class="glance-value"><span id="glanceNow">–</span><span class="glance-unit">W</span></span>
+            <span class="glance-sub" id="glanceNowSub">solar input</span>
+          </div>
+          <div class="glance-item">
+            <span class="glance-label">Today</span>
+            <span class="glance-value accent"><span id="glanceToday">–</span><span class="glance-unit">kWh</span></span>
+            <span class="glance-sub" id="glanceTodaySub">energy so far</span>
+          </div>
+          <div class="glance-item">
+            <span class="glance-label">Peak</span>
+            <span class="glance-value"><span id="glancePeak">–</span><span class="glance-unit" id="glancePeakUnit">W</span></span>
+            <span class="glance-sub" id="glancePeakSub">best today</span>
+          </div>
+        </div>
+        <div class="glance-bar" aria-hidden="true"><span id="glanceFill"></span></div>
+      </div>
 
       <!-- Power over time -->
       <div class="panel">
