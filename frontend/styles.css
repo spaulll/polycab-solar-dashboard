@@ -3156,3 +3156,20 @@ footer{
   .stat-value{ font-size: 20px; }
   .glance-value{ font-size: 18px; }
 }
+
+/* Live hero now pairs the sun dial with the glance summary; the stat
+   strip lives below as its own full-width 3×2 grid. The 2-up hero is
+   desktop-only so the ≤1020px single-column stack still wins. */
+@media (min-width: 1021px){
+  .live-hero{ grid-template-columns: minmax(300px, 1fr) minmax(0, 1.2fr); }
+}
+.stats{ margin-bottom: 16px; }
+
+/* Pace line lives in the glance card now (same id, same JS). It keeps the
+   reserved-line behavior so appearing never reflows the card. */
+.glance-pace{ padding: 2px 20px 0; }
+.glance-bar{ margin-top: 10px; }
+
+@media (max-width: 620px){
+  .glance-pace{ padding-left: 14px; padding-right: 14px; }
+}

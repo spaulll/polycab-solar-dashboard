@@ -211,7 +211,7 @@
     <span id="nightText">Inverter is asleep. Waiting for sunrise…</span>
   </div>
 
-  <!-- Live hero: sun dial beside the stat tiles (dial first on phones) -->
+  <!-- Live hero: sun dial beside the at-a-glance summary (dial first on phones) -->
   <div class="live-hero">
 
   <!-- ================= Sun path ================= -->
@@ -232,6 +232,38 @@
         <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sunset"/></svg>
       </span>
     </div>
+  </div>
+
+  <!-- Today at a glance beside the sun dial (mirrors live stats) -->
+  <div class="panel glance-panel">
+    <div class="panel-head glance-head">
+      <div class="panel-head-main">
+        <h3 class="panel-title">Today at a glance</h3>
+        <p class="panel-subtitle" id="glanceSub">live summary</p>
+      </div>
+      <span class="glance-live"><span class="dot live" id="glanceDot"></span><span id="glanceState">Live</span></span>
+    </div>
+    <div class="glance-grid">
+      <div class="glance-item">
+        <span class="glance-label">Now</span>
+        <span class="glance-value"><span id="glanceNow">–</span><span class="glance-unit">W</span></span>
+        <span class="glance-sub" id="glanceNowSub">solar input</span>
+      </div>
+      <div class="glance-item">
+        <span class="glance-label">Today</span>
+        <span class="glance-value accent"><span id="glanceToday">–</span><span class="glance-unit">kWh</span></span>
+        <span class="glance-sub" id="glanceTodaySub">energy so far</span>
+      </div>
+      <div class="glance-item">
+        <span class="glance-label">Peak</span>
+        <span class="glance-value"><span id="glancePeak">–</span><span class="glance-unit" id="glancePeakUnit">W</span></span>
+        <span class="glance-sub" id="glancePeakSub">best today</span>
+      </div>
+    </div>
+    <p class="panel-subtitle glance-pace" id="paceTag" hidden></p>
+    <div class="glance-bar" aria-hidden="true"><span id="glanceFill"></span></div>
+  </div>
+
   </div>
 
   <!-- ================= Live stat strip ================= -->
@@ -267,48 +299,16 @@
     </article>
   </section>
 
-  </div>
-
   <!-- Live workspace: today's chart left, gauge + status right -->
   <div class="layout layout-live">
 
     <section class="col-main">
-
-      <!-- Today at a glance: premium minimal summary (mirrors live stats) -->
-      <div class="panel glance-panel">
-        <div class="panel-head glance-head">
-          <div class="panel-head-main">
-            <h3 class="panel-title">Today at a glance</h3>
-            <p class="panel-subtitle" id="glanceSub">live summary</p>
-          </div>
-          <span class="glance-live"><span class="dot live" id="glanceDot"></span><span id="glanceState">Live</span></span>
-        </div>
-        <div class="glance-grid">
-          <div class="glance-item">
-            <span class="glance-label">Now</span>
-            <span class="glance-value"><span id="glanceNow">–</span><span class="glance-unit">W</span></span>
-            <span class="glance-sub" id="glanceNowSub">solar input</span>
-          </div>
-          <div class="glance-item">
-            <span class="glance-label">Today</span>
-            <span class="glance-value accent"><span id="glanceToday">–</span><span class="glance-unit">kWh</span></span>
-            <span class="glance-sub" id="glanceTodaySub">energy so far</span>
-          </div>
-          <div class="glance-item">
-            <span class="glance-label">Peak</span>
-            <span class="glance-value"><span id="glancePeak">–</span><span class="glance-unit" id="glancePeakUnit">W</span></span>
-            <span class="glance-sub" id="glancePeakSub">best today</span>
-          </div>
-        </div>
-        <div class="glance-bar" aria-hidden="true"><span id="glanceFill"></span></div>
-      </div>
 
       <!-- Power over time -->
       <div class="panel">
         <div class="panel-head">
           <div class="panel-head-main">
             <h3 class="panel-title">Power Over Time</h3>
-            <p class="panel-subtitle" id="paceTag" hidden></p>
           </div>
           <div class="range-toggle" id="rangeToggle">
             <button data-range="1h">1H</button>
