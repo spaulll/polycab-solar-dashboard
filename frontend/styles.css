@@ -2368,10 +2368,10 @@ footer{
   .topbar-right{ width: 100%; gap: 8px; }
   .topbar-actions{ margin-left: auto; }
 
-  /* --- Topbar pills: keep the colored dot, drop the text label so the
-         connection + day/night pills don't crowd the actions on narrow
-         viewports. The dot's color still signals the state at a glance. --- */
-  .pill-label{ display: none; }
+  /* --- Topbar pills: labels stay visible but compact. Bare dots without
+         text read as a rendering bug; short explicit labels ("live",
+         "day mode") make the state obvious at a glance. --- */
+  .pill{ font-size: 11px; }
 
   /* --- Sun path card: dial scales with the narrow viewport --- */
   .sun-arc-plot{ width: min(100%, 325px); margin-top: -33.33px; }
@@ -3285,3 +3285,62 @@ footer{
   transition: transform var(--dur-fast) var(--ease-out);
 }
 .stats-toggle[aria-expanded="true"] .stats-toggle-chev{ transform: rotate(180deg); }
+
+/* ==========================================================================
+   Phone refinement (≤620px) — calm the topbar, heads, type and dock.
+   A 392px viewport has no room for desktop-sized display type, side-fit
+   panel controls, or a 62px dock. Unsupported :has() simply keeps the old
+   wrapping behavior, so this degrades gracefully.
+   ========================================================================== */
+@media (max-width: 620px){
+  /* --- Type scale down --- */
+  .brand-text h1{ font-size: 13px; }
+  .brand-sub{ font-size: 11px; }
+  .brand-mark{ width: 26px; height: 26px; }
+  .panel-title{ font-size: 11px; letter-spacing: 0.1em; }
+  .stat-label, .gen-label, .glance-label{ font-size: 10px; letter-spacing: 0.08em; }
+  .stat-value{ font-size: 19px; }
+  .glance-value{ font-size: 18px; }
+  .gen-value{ font-size: 16px; }
+  .rail-value{ font-size: 13px; }
+  .sun-countdown-value{ font-size: 24px; }
+
+  /* --- Topbar: tighter row, smaller controls --- */
+  .topbar{ gap: 8px; }
+  /* Flatten the right cluster so brand, timestamp, pills and actions wrap
+     as individual units: brand shares row one, status + actions row two. */
+  .topbar-right{ display: contents; }
+  .topbar-actions{ gap: 8px; }
+  .updated{ font-size: 11px; }
+  .pill{ padding: 4px 9px; }
+  .weather-chip{ padding: 6px 10px; gap: 6px; }
+  .weather-icon svg{ width: 15px; height: 15px; }
+  .theme-toggle{ width: 34px; height: 30px; }
+
+  /* --- Panel heads with controls stack full-width instead of wrapping --- */
+  .panel-head:has(.range-toggle),
+  .panel-head:has(.date-range){
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .range-toggle{ display: flex; }
+  .range-toggle button{
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 11px;
+    text-align: center;
+  }
+  .date-range{ width: 100%; }
+  .date-range input[type="date"]{ flex: 1 1 0; min-width: 0; }
+
+  /* --- Dock slims down --- */
+  .tabbar{ padding: 4px; gap: 2px; }
+  .tabbar button{ width: 60px; min-height: 44px; }
+  .tabbar button svg{ width: 18px; height: 18px; }
+}
+
+@media (max-width: 360px){
+  .stat-value{ font-size: 18px; }
+  .glance-value{ font-size: 17px; }
+}
