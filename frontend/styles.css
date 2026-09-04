@@ -3200,6 +3200,38 @@ footer{
   .layout-live .panel-status{ flex: none; }
 }
 
+/* Live workspace: both columns share one bottom edge so the gap below is
+   uniform. The slack goes into the chart (useful area): the Power panel
+   stretches and its holder grows past its 320px minimum. Canvas is
+   responsive + aspect-free, so it just renders taller. Phones stack, so
+   this stays desktop-only. */
+@media (min-width: 1021px){
+  .layout-live{ align-items: stretch; }
+  .layout-live .col-main{ display: flex; flex-direction: column; }
+  .layout-live .col-main .panel{ flex: 1 1 auto; display: flex; flex-direction: column; }
+  .layout-live .col-main .chart-holder{ flex: 1 1 auto; height: auto; min-height: 320px; }
+}
+
+/* Trends + Insights: every last card shares one bottom plane. Same recipe
+   as Live, applied to every panel (not just the last) so hidden siblings
+   like the Weather panel can't break it: the row stretches, panels share
+   the slack, chart holders absorb it into useful area. Panels without a
+   chart keep natural content with an airy bottom. Desktop-only. */
+@media (min-width: 1021px){
+  [data-view="trends"] .layout,
+  [data-view="insights"] .layout{ align-items: stretch; }
+  [data-view="trends"] .col-main,
+  [data-view="insights"] .col-main{ display: flex; flex-direction: column; }
+  [data-view="trends"] .col-main > .panel,
+  [data-view="insights"] .col-main > .panel,
+  [data-view="trends"] .col-side > .panel,
+  [data-view="insights"] .col-side > .panel{ flex: 1 1 auto; }
+  [data-view="trends"] .col-main > .panel,
+  [data-view="insights"] .col-main > .panel{ display: flex; flex-direction: column; }
+  [data-view="trends"] .chart-holder,
+  [data-view="insights"] .chart-holder{ flex: 1 1 auto; height: auto; min-height: 220px; }
+}
+
 @media (max-width: 620px){
   .panel, .sun-arc-card, .glance-panel, .gen-card, .night-banner{ border-radius: 16px; }
   .stat-card{ border-radius: 16px; }
