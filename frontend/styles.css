@@ -3203,3 +3203,31 @@ footer{
      countdown collapses the card to a sliver. Real data always exceeds this. */
   .sun-arc-card{ min-height: 180px; }
 }
+
+/* Pace bar: today kWh vs typical kWh. Accent = energy progress; the power
+   bar below stays steel so the two never read as one meter. */
+.pace-bar{
+  height: 4px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  margin: 8px 20px 0;
+  overflow: hidden;
+}
+.pace-bar span{
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-line));
+  transition: width 0.6s var(--ease-out);
+}
+/* Wide screens only: the phone sheet keeps the tighter 14px inset. */
+@media (min-width: 621px){
+  .glance-bar{ margin-left: 20px; margin-right: 20px; }
+}
+.glance-bar span{ background: linear-gradient(90deg, var(--steel), color-mix(in srgb, var(--steel) 40%, transparent)); }
+
+@media (max-width: 620px){
+  .pace-bar{ margin-left: 14px; margin-right: 14px; }
+}

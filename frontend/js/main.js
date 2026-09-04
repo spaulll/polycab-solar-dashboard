@@ -98,8 +98,9 @@ function stopDayPolling(){
 //   all      -> /api/history/solar-profile (long-term normalized profile)
 // Peak Production always comes separately from /api/insights/peak, which
 // reads MAX(raw DB reading) + its record timestamp -- fully independent of
-// the chart aggregation for the active range. The today range also fetches
-// the projection (dashed typical-day overlay + pace tag, owned by charts.js).
+// the chart aggregation for the active range. Every range additionally
+// fetches the today projection (dashed typical-day overlay in the today
+// view + the always-on glance pace line, owned by charts.js).
 async function loadHistory(){
   try{
     loadPeakProduction();
@@ -117,9 +118,11 @@ async function loadHistory(){
       computeInsights(readings);
       // Seed the live-tile sparkline window (it self-trims to ~30 min).
       if(readings.length) seedFromReadings(readings.slice(-120));
-      if(state.range === 'today') loadTodayProjection();
     }
-    // Pace tag follows the active range (hidden everywhere but today).
+    // The glance pace line lives outside the chart now, so today's
+    // projection loads in every range (the dashed overlay still only
+    // renders in the today view).
+    loadTodayProjection();
     updatePaceTag();
   }catch(e){
     console.error('Failed to load history', e);

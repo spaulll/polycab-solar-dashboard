@@ -21,6 +21,7 @@ import { GAP_THRESHOLD_MS, MAX_POINTS, TODAY_MAX_POINTS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
 import { fetchTodayProjection } from './api.js';
+import { getDayWindow } from './sun.js';
 import { prefersReducedMotion } from './motion.js';
 
 const el = id => document.getElementById(id);
@@ -464,12 +465,13 @@ function renderToday(readings, sunInfo){
 // integrating that same fetched curve -- no refetch per tick.
 //
 // Degradation: fewer than 3 days of history means nothing is "typical" yet
-// -> no overlay, no tag; night and the first half hour after sunrise hide
-// only the tag (too little signal to pace against); after sunset the tag
-// freezes at the day's actual finish vs the typical total. A power cut
-// legitimately reads as a low pace -- the tag's tooltip says so.
+// -> no overlay, and the pace line states today's known total instead; night
+// reports the finished day; the first half hour after sunrise states today
+// without pacing (too little signal); after sunset the line freezes at the
+// day's actual finish vs the typical total. A power cut legitimately reads
+// as a low pace -- the line's tooltip says so.
 const TYPICAL_ALPHA = 0.45;          // existing series color at reduced alpha
-const PACE_WARMUP_SECONDS = 30 * 60; // hide the tag right after sunrise
+const PACE_WARMUP_SECONDS = 30 * 60; // state (don't pace) right after sunrise
 
 let todayProjection = null;   // last /api/today/projection payload
 let projReqId = 0;            // guards against stale responses on fast toggles
@@ -513,7 +515,10 @@ async function loadTodayProjection(){
   const reqId = ++projReqId;
   try{
     const payload = await fetchTodayProjection();
-    if(reqId !== projReqId || state.range !== 'today') return;
+    // Range-independent: the payload describes today, and the glance pace
+    // line needs it in every chart range (the overlay itself still only
+    // renders in the today view).
+    if(reqId !== projReqId) return;
     todayProjection = (payload && !payload.error) ? payload : null;
     applyTodayOverlay();
     powerChart.update('none');
@@ -546,49 +551,87 @@ function cumulativeTypicalWs(limitSec){
 // W·s -> kWh (J/3600 = Wh, /1000 = kWh).
 const WS_TO_KWH = 1 / 3600000;
 
-// Pace tag in the panel head: "PACE X · TYP Y KWH". Kept terse on purpose
-// (the tooltip carries the full sentence). Recomputed from the fetched curve
-// on every live reading (`eTodayKwh`), falling back to the payload's own
-// current_kwh otherwise. Hides itself whenever the view, time of day or
-// history doesn't support an honest statement.
+// Pace line in the glance card: always visible. Daytime paces today's yield
+// against the long-term typical day ("PACE X · TYP Y KWH"); at night it
+// reports the finished day instead ("NIGHT · TODAY X · TYP Y KWH"); with no
+// usable history it still states today's known total. The slim pace bar
+// under the line fills today/typical. Recomputed on every live reading
+// (`eTodayKwh`), falling back to the payload's own current_kwh otherwise.
 function updatePaceTag(eTodayKwh){
   const tag = el('paceTag');
-  const hide = () => { tag.hidden = true; };
-  if(state.range !== 'today' || state.nightMode || !projectionUsable()) return hide();
-  if(!todayWindow?.sunrise || !todayWindow?.sunset) return hide();
+  const fill = el('paceFill');
+  const show = (text, title, frac) => {
+    tag.hidden = false;
+    tag.textContent = text;
+    if(title !== undefined) tag.title = title;
+    if(fill) fill.style.width = `${Math.round(Math.max(0, Math.min(1, frac || 0)) * 100)}%`;
+  };
 
-  const sunriseMs = Date.parse(todayWindow.sunrise);
-  const sunsetMs = Date.parse(todayWindow.sunset);
-  if(!isFinite(sunriseMs) || !isFinite(sunsetMs)) return hide();
-
-  const kwh = (eTodayKwh ?? eTodayKwh === 0)
+  const raw = (eTodayKwh ?? eTodayKwh === 0)
     ? Number(eTodayKwh)
-    : todayProjection.current_kwh;
-  if(kwh === null || kwh === undefined || Number.isNaN(kwh)) return hide();
+    : (projectionUsable() ? todayProjection.current_kwh : null);
+  const kwh = (raw === null || raw === undefined || Number.isNaN(Number(raw)))
+    ? null : Number(raw);
+  const typRaw = projectionUsable() ? todayProjection.typical_total_kwh : null;
+  const typical = (typRaw === null || typRaw === undefined || Number.isNaN(Number(typRaw)))
+    ? null : Number(typRaw);
+
+  // No history yet: state today's known total (or wait honestly).
+  if(typical === null){
+    if(kwh === null) return show('Today – · typ – kWh', 'Collecting history — averages appear after a few days.', 0);
+    return show(`Today ${fmt(kwh, 1)} kWh`, 'Today’s yield so far. The typical-day comparison appears after a few days of history.', 0);
+  }
+  const typ = fmt(typical, 1);
+
+  // Night: the inverter is asleep — report the finished day, not a pace.
+  if(state.nightMode){
+    if(kwh === null) return show(`Night · typ ${typ} kWh`, 'Inverter asleep. Typical yield for an average day.', 0);
+    return show(`Night · today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+      'How today finished against your long-term average day. Resumes at sunrise.',
+      typical ? kwh / typical : 0);
+  }
+
+  // Pace needs today's solar window. The chart only provides it in the
+  // today view, so other ranges fall back to the sun module's window
+  // (same server source of truth, refreshed on its own schedule).
+  const win = (todayWindow?.sunrise && todayWindow?.sunset)
+    ? todayWindow : getDayWindow();
+  if(!win.sunrise || !win.sunset || kwh === null){
+    return show(`Today ${kwh === null ? '–' : fmt(kwh, 1)} · typ ${typ} kWh`,
+      'Today’s yield against your long-term average day.',
+      typical && kwh !== null ? kwh / typical : 0);
+  }
+
+  const sunriseMs = new Date(win.sunrise).getTime();
+  const sunsetMs = new Date(win.sunset).getTime();
+  if(!isFinite(sunriseMs) || !isFinite(sunsetMs)){
+    return show(`Today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+      'Today’s yield against your long-term average day.', typical ? kwh / typical : 0);
+  }
 
   const offSec = (Date.now() - sunriseMs) / 1000;
   const spanSec = (sunsetMs - sunriseMs) / 1000;
-  const typical = fmt(todayProjection.typical_total_kwh, 1);
 
   if(offSec >= spanSec){
     // Sunset passed: freeze at the actual final vs the typical day.
-    tag.hidden = false;
-    tag.textContent = `Final ${fmt(kwh, 1)} · typ ${typical} kWh`;
-    tag.title =
-      "How today actually finished against your long-term average day.";
-    return;
+    return show(`Final ${fmt(kwh, 1)} · typ ${typ} kWh`,
+      'How today actually finished against your long-term average day.',
+      typical ? kwh / typical : 0);
   }
-  // Night and the first ~30 minutes: too little evidence to pace against.
-  if(offSec < PACE_WARMUP_SECONDS) return hide();
+  // First ~30 minutes: too little evidence to pace against — state today.
+  if(offSec < PACE_WARMUP_SECONDS){
+    return show(`Today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+      'Early in the solar day — pacing starts after the first ~30 minutes.',
+      typical ? kwh / typical : 0);
+  }
 
   const remainingKwh =
     (cumulativeTypicalWs(Infinity) - cumulativeTypicalWs(offSec)) * WS_TO_KWH;
-  tag.hidden = false;
-  tag.textContent = `Pace ${fmt(kwh + remainingKwh, 1)} · typ ${typical} kWh`;
-  tag.title =
+  return show(`Pace ${fmt(kwh + remainingKwh, 1)} · typ ${typ} kWh`,
     'Projected final yield if the rest of the day follows your long-term ' +
     'average day. Compared to your long-term average day — a power cut ' +
-    'earlier today legitimately lowers it.';
+    'earlier today legitimately lowers it.',
+    typical ? kwh / typical : 0);
 }
 
 // ---------- View: 7D (sequential compressed solar-day timeline) ----------

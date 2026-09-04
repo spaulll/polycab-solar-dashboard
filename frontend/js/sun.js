@@ -281,8 +281,15 @@ async function refreshSunInfo(){
   }
 }
 
+// Today's solar window for cross-module consumers (e.g. the glance pace
+// line, which needs it in every chart range). Same server source of truth,
+// refreshed on this module's own schedule. Dates or null.
+function getDayWindow(){
+  return { sunrise: daySunrise, sunset: daySunset };
+}
+
 function startSunTicker(){
   setInterval(tickSunCountdown, SUN_COUNTDOWN_TICK_MS);
 }
 
-export { updateSunInfo, refreshSunInfo, startSunTicker, tickSunCountdown };
+export { updateSunInfo, refreshSunInfo, startSunTicker, tickSunCountdown, getDayWindow };
