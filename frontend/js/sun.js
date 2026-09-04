@@ -63,6 +63,11 @@ function buildArc(){
     defs.appendChild(g);
   };
   grad('sa-stroke', [[0, 'currentColor', 0.45], [1, 'currentColor', 1]]);
+  // Night twin: opacity builds toward the marker (moon) end instead, so the
+  // bold part rides with the moon exactly like it rides with the sun by day.
+  // (One shared gradient would fade the wrong way at night because the night
+  // path is drawn mirrored, sunset -> moon.)
+  grad('sa-stroke-night', [[0, 'currentColor', 1], [1, 'currentColor', 0.45]]);
   grad('sa-wash', [[0, 'currentColor', 0.06], [1, 'currentColor', 0]],
     { x1: 0, y1: 0, x2: 0, y2: 1 });
   const haloGrad = svgEl('radialGradient', { id: 'sa-halo' });
@@ -129,17 +134,38 @@ function buildArc(){
   const sunG = svgEl('g', { class: 'sa-sun' }, [sunScale]);
 
   // Crescent reuses the instrument moon glyph, centered on the marker.
+  // Larger than the sun core so it holds its own against the bold stroke;
+  // its ivory tone comes from CSS (.sa-moon), deliberately NOT the stroke
+  // color it rides on.
   const moonPath = svgEl('path', {
     d: 'M18.6 15.1A8.2 8.2 0 0 1 8.9 5.4a8.2 8.2 0 1 0 9.7 9.7z',
     fill: 'currentColor',
   });
   const moonG = svgEl('g', { class: 'sa-moon' }, [
-    svgEl('g', { transform: 'translate(-10.8 -10.8) scale(0.9)' }, [moonPath]),
+    svgEl('g', { transform: 'translate(-15.6 -15.6) scale(1.3)' }, [moonPath]),
   ]);
+
+  // Night sky: fixed star field (twinkles only at night, see CSS).
+  // Rendered behind the stroke so it reads as atmosphere, never as data.
+  const stars = svgEl('g', { class: 'sa-stars', 'aria-hidden': 'true' });
+  const STAR_POS = [
+    [28, 42, 1.2], [58, 88, 0.9], [84, 30, 1.4], [112, 66, 0.8],
+    [138, 24, 1.1], [164, 78, 0.9], [188, 34, 1.3], [214, 92, 0.8],
+    [238, 40, 1.1], [262, 74, 0.9], [286, 28, 1.2], [44, 128, 0.8],
+    [268, 122, 0.9], [150, 108, 0.8], [200, 118, 0.9], [100, 118, 0.8],
+  ];
+  STAR_POS.forEach(([x, y, r], i) => {
+    stars.appendChild(svgEl('circle', {
+      cx: x, cy: y, r, class: 'sa-star',
+      style: `animation-delay:${(i * 0.45).toFixed(2)}s;animation-duration:${(2.6 + (i % 4) * 0.5).toFixed(1)}s`,
+    }));
+  });
+  // (Full-card drifting clouds live in index.html as .sky spans -- SVG
+  // can't paint outside its own viewBox, so weather gets an HTML layer.)
 
   const marker = svgEl('g', { class: 'sun-marker' }, [halo, sunG, moonG]);
 
-  svg.append(wash, track, ticks, elapsed, endDots, marker);
+  svg.append(wash, track, ticks, stars, elapsed, endDots, marker);
   plot.appendChild(svg);
 
   els = { wash, elapsed, marker };
@@ -153,6 +179,9 @@ function draw(a){
   if(!els) return;
   const night = sunIsNight;
   els.marker.classList.toggle('night', night);
+  // Bold overlay always builds toward the marker: sun side by day,
+  // moon side by night.
+  els.elapsed.setAttribute('stroke', night ? 'url(#sa-stroke-night)' : 'url(#sa-stroke)');
   // Solar elevation breathes the sun's size: smallest at the horizon,
   // fullest at mid-arc. Night parks it at 1 (hidden anyway). Linear
   // 1s handoff matches the per-second tick glide; skipped for reduced

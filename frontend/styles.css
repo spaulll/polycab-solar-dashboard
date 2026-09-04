@@ -3380,3 +3380,105 @@ footer{
   .stat-value{ font-size: 18px; }
   .glance-value{ font-size: 17px; }
 }
+
+/* ==========================================================================
+   Sun-arc sky — ivory moon, night stars, drifting clouds.
+   The moon deliberately does NOT wear the stroke color it rides on, so it
+   stays readable where it overlaps the bold overlay. All motion is
+   transform/opacity-only; stars gate on the card's night class.
+   ========================================================================== */
+.sa-moon{
+  color: var(--text);
+  filter: drop-shadow(0 0 6px rgba(242, 234, 211, 0.5));
+}
+[data-theme="light"] .sa-moon{
+  filter: drop-shadow(0 0 5px rgba(27, 23, 19, 0.35));
+}
+.sa-stars{
+  opacity: 0;
+  transition: opacity 1s var(--ease-out);
+}
+.sun-arc-card.night .sa-stars{ opacity: 1; }
+.sa-star{
+  fill: var(--text);
+  opacity: 0.3;
+  animation: sa-twinkle 3s ease-in-out infinite;
+}
+@keyframes sa-twinkle{
+  0%, 100%{ opacity: 0.2; }
+  50%{ opacity: 1; }
+}
+.sun-arc-card{ position: relative; container-type: inline-size; }
+/* Full-card sky: crisp CSS clouds drift edge to edge behind the dial
+   (SVG can't paint outside its viewBox). cqi units measure the card, so
+   every screen size gets a true full crossing; vw fallback otherwise. */
+.sky{
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 62%;
+  overflow: clip;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.sky-cloud{
+  position: absolute;
+  left: 0;
+  width: 120px;
+  height: 34px;
+  background: var(--text);
+  border-radius: 999px;
+  --sky-o: 0.4;
+  opacity: var(--sky-o);
+  animation: sky-drift 84s linear infinite;
+}
+.sky-cloud::before,
+.sky-cloud::after{
+  content: "";
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+.sky-cloud::before{ width: 52px; height: 52px; top: -24px; left: 20px; }
+.sky-cloud::after{ width: 36px; height: 36px; top: -15px; left: 62px; }
+.sky-cloud.c1{ top: 16%; }
+.sky-cloud.c2{ top: 46%; scale: 0.72; --sky-o: 0.32; animation-duration: 117s; animation-delay: -52s; }
+.sky-cloud.c3{ top: 30%; scale: 1.15; --sky-o: 0.28; animation-duration: 63s; animation-delay: -29s; }
+.sun-arc-card.night .sky-cloud{ --sky-o: 0.16; }
+.sun-arc-card.night .sky-cloud.c2{ --sky-o: 0.12; }
+.sun-arc-card.night .sky-cloud.c3{ --sky-o: 0.1; }
+/* Edge fade: opacity is exactly 0 throughout the off-card zones, so
+   clipped travel never reports as overflow. Desktop and phone envelopes
+   differ because the phone card nearly is the viewport. */
+@keyframes sky-drift{
+  0%{ transform: translate3d(-170px, 0, 0); opacity: 0; }
+  20%{ opacity: 0; }
+  28%{ opacity: var(--sky-o); }
+  70%{ opacity: var(--sky-o); }
+  78%{ opacity: 0; }
+  100%{ transform: translate3d(calc(100cqi + 170px), 0, 0); opacity: 0; }
+}
+@supports not (width: 1cqi){
+  @keyframes sky-drift{
+    0%{ transform: translate3d(-170px, 0, 0); opacity: 0; }
+    20%{ opacity: 0; }
+    28%{ opacity: var(--sky-o); }
+    70%{ opacity: var(--sky-o); }
+    78%{ opacity: 0; }
+    100%{ transform: translate3d(110vw, 0, 0); opacity: 0; }
+  }
+}
+@media (max-width: 620px){
+  @keyframes sky-drift{
+    0%{ transform: translate3d(-170px, 0, 0); opacity: 0; }
+    24%{ opacity: 0; }
+    32%{ opacity: var(--sky-o); }
+    48%{ opacity: var(--sky-o); }
+    56%{ opacity: 0; }
+    100%{ transform: translate3d(calc(100cqi + 170px), 0, 0); opacity: 0; }
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  .sa-star{ animation: none; }
+  .sa-stars{ transition: none; }
+  .sky-cloud{ animation: none; }
+}
