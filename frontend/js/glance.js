@@ -35,6 +35,13 @@ function syncNumbers(){
   if(solar && solar !== '–') setText('glanceNow', solar);
   if(today && today !== '–') setText('glanceToday', today);
 
+  // Collapsed-strip summary keeps the key numbers glanceable.
+  const sum = $('statsToggleSummary');
+  if(sum){
+    sum.textContent = (solar && solar !== '–' && today && today !== '–')
+      ? `${solar} W · ${today} kWh today` : '';
+  }
+
   const peak = splitPeak(text('insightPeakValue'));
   if(peak){
     setText('glancePeak', peak.num);
@@ -72,6 +79,8 @@ function syncState(){
   }
   label.textContent = state;
   if(dot) dot.className = cls;
+  const tdot = $('statsToggleDot');
+  if(tdot) tdot.className = cls;
   if(sub) sub.textContent = mode.includes('night') ? 'inverter asleep · resumes at sunrise' : 'live summary';
 }
 

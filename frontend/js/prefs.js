@@ -8,6 +8,7 @@
 //   polycab.dashboard.temperatureView  Temperature panel lens
 //   polycab.dashboard.weatherView      Weather Impact panel lens
 //   polycab.dashboard.powercutsRange   Powercuts counter window
+//   polycab.dashboard.statsOpen         Live-readings strip (open/shut)
 //
 // Reads are validated against the caller's allowed values and fall back
 // silently when storage is unavailable, corrupted, or holds a value that no

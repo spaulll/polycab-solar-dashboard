@@ -267,8 +267,15 @@
 
   </div>
 
-  <!-- ================= Live stat strip ================= -->
-  <section class="stats">
+  <!-- ================= Live readings (collapsible, shut by default) ================= -->
+  <div class="stats-wrap">
+    <button class="stats-toggle" id="statsToggle" type="button" aria-expanded="false" aria-controls="statsGrid">
+      <span class="dot live" id="statsToggleDot"></span>
+      <span class="stats-toggle-title">Live readings</span>
+      <span class="stats-toggle-summary" id="statsToggleSummary"></span>
+      <svg class="stats-toggle-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  <section class="stats" id="statsGrid" hidden>
     <article class="stat-card solar" data-tile="Solar_Input">
       <h2 class="stat-label">Solar Input</h2>
       <p class="stat-value"><span class="num" id="statSolar">–</span><span class="unit">W</span></p>
@@ -299,6 +306,7 @@
       <p class="stat-value"><span class="num" id="statLifetime">–</span><span class="unit">kWh</span></p>
     </article>
   </section>
+  </div>
 
   <!-- Live workspace: today's chart left, gauge + status right -->
   <div class="layout layout-live">

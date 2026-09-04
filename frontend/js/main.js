@@ -28,6 +28,7 @@ import { initGauge, updateGauge, dimGauge } from './gauge.js';
 import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
 import { initGlance } from './glance.js';
+import { initStatsToggle } from './statsToggle.js';
 import { initReveals } from './motion.js';
 import { toast } from './toast.js';
 import { initPullToRefresh } from './pullRefresh.js';
@@ -453,6 +454,8 @@ function refreshLive(){
     initSegmented();
     // Today-at-a-glance mirror (no data source; observes live stats).
     initGlance();
+    // Live-readings strip starts shut so the chart stays visible.
+    initStatsToggle();
     // Scroll reveals + entrance choreography gate (progressive enhancement).
     initReveals();
     // Theme next: charts read the active palette at creation and on change.

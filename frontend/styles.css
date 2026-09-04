@@ -3231,3 +3231,57 @@ footer{
 @media (max-width: 620px){
   .pace-bar{ margin-left: 14px; margin-right: 14px; }
 }
+/* Collapsible live readings: shut by default so the chart stays in view.
+   The toggle carries a live mini-summary; the grid opens below it. */
+.stats-wrap{ margin-bottom: 16px; }
+.stats{ margin-bottom: 0; }
+.stats[hidden]{ display: none; }
+.stats-toggle{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 11px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-panel);
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.stats-toggle:hover{ border-color: var(--line-strong); color: var(--text); }
+.stats-toggle:focus-visible{
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+.stats-toggle:active{ transform: scale(0.995); }
+/* Calm dot: color carries the state, no ping ring. */
+.stats-toggle .dot::after{ content: none; animation: none; }
+.stats-toggle-summary{
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.stats-toggle-chev{
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--faint);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.stats-toggle[aria-expanded="true"] .stats-toggle-chev{ transform: rotate(180deg); }
