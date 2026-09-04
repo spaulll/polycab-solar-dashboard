@@ -3173,3 +3173,33 @@ footer{
 @media (max-width: 620px){
   .glance-pace{ padding-left: 14px; padding-right: 14px; }
 }
+
+/* ==========================================================================
+   Fix: natural sidebar heights + consistent card radii
+   - The live sidebar stretched Inverter Status to the chart column's height
+     (flex:1 absorber). Natural heights read calmer; columns may end uneven.
+   - Chart holders (tinted in light mode) are square and poked past the
+     panel's rounded bottom corners. Clipping the panel fixes every chart
+     card at once; canvas tooltips are drawn, selects pop OS-native, so
+     nothing functional is clipped.
+   - One card radius everywhere: 18px desktop, 16px on phones.
+   ========================================================================== */
+
+.panel{ overflow: hidden; }
+
+.stat-card, .gen-card{ border-radius: var(--radius); }
+.night-banner{ border-radius: var(--radius); }
+.gauge-row{ gap: 16px; }
+
+@media (min-width: 1021px){
+  .layout-live{ align-items: start; }
+  .layout-live .panel-status{ flex: none; }
+}
+
+@media (max-width: 620px){
+  .panel, .sun-arc-card, .glance-panel, .gen-card, .night-banner{ border-radius: 16px; }
+  .stat-card{ border-radius: 16px; }
+  /* Empty-state guard: without sun data the plot is 0px and the pulled-up
+     countdown collapses the card to a sliver. Real data always exceeds this. */
+  .sun-arc-card{ min-height: 180px; }
+}
