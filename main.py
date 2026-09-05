@@ -699,7 +699,7 @@ async def api_errors(
 ):
     """Recent inverter error episodes, newest first (bounded history)."""
     errors = await asyncio.to_thread(database.get_recent_errors, limit)
-    return {"errors": errors}
+    return {"errors": errors, "retention_days": database.ERROR_LOG_RETENTION_DAYS}
 
 
 @app.get("/api/sun")

@@ -84,9 +84,13 @@ function fetchPowercutCount(range){
   return getJSON(`/api/powercuts?range=${range}`).then(json => json.count ?? 0);
 }
 
-// Recent inverter error episodes, newest first (server-side bounded log).
+// Recent inverter error episodes, newest first (server-side bounded log),
+// plus the server's rotation window in days so the UI can state the span.
 function fetchErrors(limit = 50){
-  return getJSON(`/api/errors?limit=${limit}`).then(json => json.errors || []);
+  return getJSON(`/api/errors?limit=${limit}`).then(json => ({
+    errors: json.errors || [],
+    retentionDays: Number.isFinite(+json.retention_days) ? +json.retention_days : null,
+  }));
 }
 
 // Weather <-> production correlation: cloud-class buckets, matched-day

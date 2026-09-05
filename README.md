@@ -353,7 +353,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/export?range=...` | CSV download of the given range |
 | `GET /api/status` | Current inverter status (`online`/`offline`/`night`), offline-since, last reading/error, sun info |
 | `GET /api/powercuts?range=today\|7d\|30d\|lifetime` | Number of recorded powercut events in the given window |
-| `GET /api/errors?limit=50` | Recent inverter error episodes, newest first (bounded `error_log` table; consecutive identical failures collapse into one episode) |
+| `GET /api/errors?limit=50` | Recent inverter error episodes, newest first (bounded `error_log` table; consecutive identical failures collapse into one episode). Also returns `retention_days` — the 7-day rotation window the Error History popup states in its subtitle |
 | `GET /api/sun` | Next sunrise/sunset times and countdowns, plus today's actual `sunrise`/`sunset` window (used by the Live view's sun-path arc) |
 | `GET /api/weather` | Current weather + a short forecast for the configured location, in a provider-agnostic normalized shape (`provider`, `temp`, `feels_like`, `humidity`, `wind_speed`, `condition`, `icon`, `cloud_cover`, `pop`, `high`/`low`, `forecast[]`). **Primary:** OpenWeatherMap (only when `OPENWEATHER_API_KEY` is set); **fallback:** Open-Meteo — no key required, used automatically whenever OWM is unconfigured or fails. Cached in-memory for 15 minutes. Returns `502 {"detail": ...}` when every provider fails |
 | `WS /ws` | Live reading/status broadcast |

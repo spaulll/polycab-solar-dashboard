@@ -20,6 +20,7 @@ const MAX_EPISODES = 50;
 
 let errors = [];        // [{logged_at, message}] newest first
 let recovered = false;  // a successful reading arrived since the last error
+let retentionDays = null; // server rotation window (days), from /api/errors
 
 // ---------- Counter (status card) ----------
 function renderCounter(){
@@ -46,22 +47,49 @@ function fmtWhen(iso){
   });
 }
 
+// "Aug 29" (year appended when outside the current year) for range ends.
+function fmtDay(iso){
+  const d = new Date(iso);
+  if(Number.isNaN(d.getTime())) return null;
+  const opts = { month: 'short', day: 'numeric' };
+  if(d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString([], opts);
+}
+
 function renderList(list){
-  el('errorsSub').textContent = list.length
-    ? `${list.length} recorded episode${list.length === 1 ? '' : 's'}`
-    : 'nothing recorded yet';
-  el('errorsList').innerHTML = list.length
-    ? list.map(e => `
+  const sub = el('errorsSub');
+  if(!list.length){
+    sub.textContent = retentionDays
+      ? `Nothing in the last ${retentionDays} days`
+      : 'nothing recorded yet';
+    sub.title = retentionDays
+      ? `Error history rotates every ${retentionDays} days — older entries are deleted.`
+      : '';
+    el('errorsList').innerHTML = '<p class="err-empty">No errors recorded</p>';
+    return;
+  }
+  // Newest first: the span runs oldest shown → newest shown, so the user
+  // sees exactly which window these episodes come from.
+  const newest = fmtDay(list[0].logged_at);
+  const oldest = fmtDay(list[list.length - 1].logged_at);
+  const span = (oldest && newest && oldest !== newest)
+    ? `${oldest} – ${newest}` : (newest || oldest || '');
+  sub.textContent = `${list.length} recorded episode${list.length === 1 ? '' : 's'}`
+    + (span ? ` · ${span}` : '');
+  sub.title = retentionDays
+    ? `Showing the last ${retentionDays} days — older entries rotate away.`
+    : '';
+  el('errorsList').innerHTML = list.map(e => `
         <div class="err-item">
           <span class="err-when">${escapeHtml(fmtWhen(e.logged_at))}</span>
           <span class="err-what">${escapeHtml(e.message)}</span>
-        </div>`).join('')
-    : '<p class="err-empty">No errors recorded</p>';
+        </div>`).join('');
 }
 
 async function loadErrors(){
   try{
-    const fetched = await fetchErrors(MAX_EPISODES);
+    const { errors: fetched, retentionDays: windowDays } = await fetchErrors(MAX_EPISODES);
+    if(windowDays) retentionDays = windowDays;
     // Merge: fetched (authoritative) first, then any in-memory episodes the
     // fetch doesn't know about yet, deduped by timestamp+message. WS episode
     // timestamps are the exact strings the server logs with, so the key is
