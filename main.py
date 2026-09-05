@@ -722,6 +722,19 @@ async def api_weather():
         raise HTTPException(status_code=502, detail=f"Weather unavailable: {e}")
 
 
+@app.get("/api/forecast/tomorrow")
+async def api_forecast_tomorrow():
+    """
+    Expected tomorrow kWh via provider-agnostic daylight derate of the
+    typical day (see weather.get_tomorrow_estimate): works with an OWM key
+    set AND unset (Open-Meteo fallback). Daylight-only (tomorrow's
+    sunrise->sunset) so night clouds don't dilute; day_count < 3, provider
+    fail or empty forecast degrades to expected_kwh None so the UI can hide
+    honestly. Cached server-side for 1 hour.
+    """
+    return await asyncio.to_thread(weather.get_tomorrow_estimate)
+
+
 # ---------------------------------------------------------------------------
 # Serve the frontend
 # ---------------------------------------------------------------------------

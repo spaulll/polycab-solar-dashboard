@@ -700,6 +700,44 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
 
 .gen-alt .asterisk{ color: var(--accent); margin-left: 2px; }
 
+/* Specific-yield sub-lines under Today/Month (kWh/kWp · CF %). Muted
+   small-type only, reuses subtitle tokens. Hidden when capacity unset. */
+.gen-sub{
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-sub[hidden]{ display: none; }
+
+/* WoW / MoM delta tags under Week/Month/Year: arrow + text (never
+   color-only). Muted base, green/red for direction with sufficient
+   contrast in both themes. Wraps cleanly on narrow cards. */
+.gen-delta{
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-delta[hidden]{ display: none; }
+
+.gen-delta.up{ color: var(--ok); }
+.gen-delta.down{ color: var(--err); }
+
 /* Explanation of the calculated-vs-inverter gap lives in the card's native
    tooltip (title attribute); the cursor hints it's hoverable. */
 .gen-card.wide{ cursor: help; }
@@ -1149,6 +1187,80 @@ select:hover{ color: var(--text); }
 }
 
 .chart-msg.show{ display: grid; }
+
+/* ==========================================================================
+   Year heatmap — GitHub-style daily-yield calendar (pure HTML/CSS grid)
+   Amber scale from the existing palette; blank = no data (never zero).
+   The scroll container scrolls internally on phones; the page never gains
+   horizontal overflow.
+   ========================================================================== */
+
+.heatmap-scroll{
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 16px 20px 8px;
+  box-sizing: border-box;
+}
+
+.heatmap-grid{
+  display: inline-flex;
+  gap: 3px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hm-week{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.hm-day{
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+/* Blank = no data (not zero). Pads outside the year are invisible. */
+.hm-day.lv0{
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+.hm-day.lv1{ background: color-mix(in srgb, var(--accent) 25%, transparent); border-color: transparent; }
+.hm-day.lv2{ background: color-mix(in srgb, var(--accent) 50%, transparent); border-color: transparent; }
+.hm-day.lv3{ background: color-mix(in srgb, var(--accent) 75%, transparent); border-color: transparent; }
+.hm-day.lv4{ background: var(--accent); border-color: transparent; }
+
+.hm-day.pad{
+  background: transparent;
+  border-color: transparent;
+}
+
+.heatmap-legend{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 20px 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.heatmap-legend .hm-day{
+  width: 11px;
+  height: 11px;
+}
+
+@media (max-width: 620px){
+  .heatmap-scroll{ padding: 12px 14px 6px; }
+  .heatmap-legend{ padding: 6px 14px 12px; }
+}
 
 /* ==========================================================================
    Live output gauge + inverter mood — two balanced cards side by side
@@ -1887,6 +1999,21 @@ footer{
   text-align: center;
 }
 
+/* DB health line in the Trends view: one muted footer line below the
+   Monthly/Weather panels (not a card). Reuses subtitle tokens only. */
+.db-health{
+  margin: 16px 2px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.db-health[hidden]{ display: none; }
+
 /* ==========================================================================
    Weather chip (top bar) + popup card
    ========================================================================== */
@@ -2090,6 +2217,20 @@ footer{
   color: var(--faint);
   text-align: center;
 }
+
+/* Tomorrow estimate row in the weather popup: muted, wraps cleanly. */
+.weather-tomorrow{
+  margin: 12px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--dim);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+
+.weather-tomorrow[hidden]{ display: none; }
 
 .weather-provider{
   margin: 12px 0 0;
@@ -3228,8 +3369,22 @@ footer{
 .glance-pace{ padding: 2px 20px 0; }
 .glance-bar{ margin-top: 10px; }
 
+/* Tomorrow estimate sub-line under the pace tag: muted, wraps cleanly so
+   the full `Tomorrow ≈ X (typical Y, cloudy Z%)` never overflows narrow
+   phones. */
+.glance-tomorrow{
+  padding: 2px 20px 0;
+  color: var(--faint);
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+
+.glance-tomorrow[hidden]{ display: none; }
+
 @media (max-width: 620px){
   .glance-pace{ padding-left: 14px; padding-right: 14px; }
+  .glance-tomorrow{ padding-left: 14px; padding-right: 14px; }
 }
 
 /* ==========================================================================

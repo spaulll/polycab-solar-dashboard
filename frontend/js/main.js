@@ -28,6 +28,8 @@ import { initGauge, updateGauge, dimGauge } from './gauge.js';
 import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
 import { initGlance } from './glance.js';
+import { loadDbHealth } from './dbhealth.js';
+import { initHeatmap, renderHeatmap } from './heatmap.js';
 import { initStatsToggle } from './statsToggle.js';
 import { initReveals } from './motion.js';
 import { toast } from './toast.js';
@@ -84,6 +86,7 @@ function startDayPolling(){
   dayTimers.push(setInterval(loadMonthlyEnergy, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadTemperature, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadWeatherImpact, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadDbHealth, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -173,6 +176,8 @@ async function loadDailySummary(){
     // Same aggregated series feeds the cumulative running-total chart; the
     // extra work is one client-side pass over a few hundred points.
     renderCumulative(days);
+    // Year heatmap reuses the same full day series (no extra fetch).
+    renderHeatmap(days);
   }catch(e){
     console.error('Failed to load daily summary', e);
   }
@@ -308,6 +313,7 @@ function handleWSMessage(msg){
     loadMonthlyEnergy();
     loadTemperature();
     loadWeatherImpact();
+    loadDbHealth();
     loadPowercutCount();
     startDayPolling();
   }
@@ -480,6 +486,8 @@ function refreshLive(){
   // loadHistory()/loadDailySummary()/... below must render the restored
   // views, never the hardcoded defaults.
   restorePersistedRanges();
+  // Year heatmap selector restores before the first day series lands.
+  initHeatmap();
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();
@@ -499,6 +507,7 @@ function refreshLive(){
   // Weather Impact panel: same pattern -- saved lens first, then fetch.
   initWeatherImpact();
   await loadWeatherImpact();
+  await loadDbHealth();
   await loadPowercutCount();
   // Error history counter (server-side bounded log; WS errors fold in live).
   initErrors();

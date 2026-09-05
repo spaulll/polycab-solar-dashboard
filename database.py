@@ -1400,6 +1400,56 @@ def get_daily_summary() -> list[dict]:
     return rows
 
 
+def telescopic_slab_bill(kwh: float, slabs: list) -> Optional[float]:
+    """
+    Telescopic (incremental) slab billing: each slab's rate applies only to
+    the units falling inside it, e.g. 50 kWh on
+    [{upto:34,rate:5.04},{upto:60,rate:6.33},...] =
+    34*5.04 + 16*6.33. Returns None for missing/invalid inputs (caller falls
+    back to flat tariff). Pure arithmetic, no I/O.
+    """
+    try:
+        remaining = float(kwh)
+    except (TypeError, ValueError):
+        return None
+    if remaining is None or remaining < 0:
+        return None
+    if not slabs:
+        return None
+    total = 0.0
+    prev_upto = 0.0
+    for slab in slabs:
+        try:
+            rate = float(slab["rate"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not (rate > 0):
+            return None
+        upto = slab.get("upto")
+        if upto is None:
+            total += remaining * rate
+            remaining = 0.0
+            break
+        try:
+            upto_f = float(upto)
+        except (TypeError, ValueError):
+            return None
+        if not (upto_f > prev_upto):
+            return None
+        width = upto_f - prev_upto
+        take = min(remaining, width)
+        total += take * rate
+        remaining -= take
+        prev_upto = upto_f
+        if remaining <= 0:
+            break
+    # If consumption exceeds the last finite slab without a null tail, the
+    # config is incomplete — signal fallback instead of under-billing.
+    if remaining > 1e-9:
+        return None
+    return total
+
+
 def get_generation_summary() -> dict:
     """
     Generation KPIs in kWh:
@@ -1495,12 +1545,16 @@ def get_generation_summary() -> dict:
     month_kwh = 0.0
     year_kwh = 0.0
     days_sum = 0.0
+    series: dict = {}
     for r in list(permanent) + list(raw_days):
         try:
             d = datetime.strptime(r["day"], "%Y-%m-%d").date()
         except (TypeError, ValueError):
             continue
         energy = r["energy_kwh"] or 0.0
+        # Later rows overwrite earlier for the same day; permanent and raw
+        # windows are disjoint by construction (raw excludes permanent days).
+        series[d] = float(energy)
         days_sum += energy
         if d == yesterday:
             yesterday_kwh += energy
@@ -1514,6 +1568,70 @@ def get_generation_summary() -> dict:
     def _round(value):
         return round(value, 2) if value is not None else None
 
+    def _round1(value):
+        return round(value, 1) if value is not None else None
+
+    # --- WoW / MoM (/YoY) deltas: equal elapsed windows, honestly ----------
+    # Week: this Mon->today (N days) vs same N days last week.
+    # Month: 1st->today (N = today.day) vs same day-numbers last month.
+    # Year: Jan 1->today vs same day-numbers last year (cheap, same pattern).
+    # Null when history insufficient (any day in either window missing) or
+    # when the comparison baseline is <= 0 (avoids div-by-zero/infinite %).
+    def _window_pct(cur_dates: list, prev_dates: list):
+        for dd in cur_dates + prev_dates:
+            if dd not in series:
+                return None, None, None
+        cur = sum(series[dd] for dd in cur_dates)
+        prev = sum(series[dd] for dd in prev_dates)
+        if prev is None or prev <= 0:
+            return None, _round(cur), _round(prev)
+        pct = (cur - prev) / prev * 100.0
+        return _round1(pct), _round(cur), _round(prev)
+
+    # Week windows.
+    _n_week = (today - week_start).days + 1
+    _cur_week_dates = [week_start + timedelta(days=i) for i in range(_n_week)]
+    _prev_week_start = week_start - timedelta(days=7)
+    _prev_week_dates = [_prev_week_start + timedelta(days=i) for i in range(_n_week)]
+    week_pct, week_cur, week_prev = _window_pct(_cur_week_dates, _prev_week_dates)
+
+    # Month windows (same day-numbers last month).
+    _n_month = today.day
+    _cur_month_dates = [month_start + timedelta(days=i) for i in range(_n_month)]
+    try:
+        _prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
+        _prev_month_len = (month_start - _prev_month_start).days
+    except (ValueError, OverflowError):
+        _prev_month_start = None
+        _prev_month_len = 0
+    if _prev_month_start is not None and _prev_month_len >= _n_month:
+        _prev_month_dates = [_prev_month_start + timedelta(days=i) for i in range(_n_month)]
+        month_pct, month_cur, month_prev = _window_pct(_cur_month_dates, _prev_month_dates)
+    else:
+        month_pct, month_cur, month_prev = None, _round(month_kwh), None
+
+    # Year windows (same day-numbers last year).
+    try:
+        _prev_year_start = year_start.replace(year=year_start.year - 1)
+        _n_year = (today - year_start).days + 1
+        _cur_year_dates = [year_start + timedelta(days=i) for i in range(_n_year)]
+        _prev_year_dates = [_prev_year_start + timedelta(days=i) for i in range(_n_year)]
+        year_pct, year_cur, year_prev = _window_pct(_cur_year_dates, _prev_year_dates)
+    except (ValueError, OverflowError):
+        year_pct, year_cur, year_prev = None, _round(year_kwh), None
+
+    deltas = {
+        "week_pct": week_pct,
+        "week_current_kwh": week_cur,
+        "week_prev_kwh": week_prev,
+        "month_pct": month_pct,
+        "month_current_kwh": month_cur,
+        "month_prev_kwh": month_prev,
+        "year_pct": year_pct,
+        "year_current_kwh": year_cur,
+        "year_prev_kwh": year_prev,
+    }
+
     # --- Savings & impact (money saved + CO2 avoided) --------------------
     tariff = config.ELECTRICITY_TARIFF
     if tariff is not None and tariff > 0:
@@ -1522,6 +1640,19 @@ def get_generation_summary() -> dict:
         # the same figure the KPI strip shows as Inverter Lifetime. Null
         # until the first e_total reading exists; no fabricated zeros.
         lifetime = lifetime_kwh
+        # Slab bill estimate for this month's kWh: telescopic engine when
+        # TARIFF_SLABS parses and TARIFF_TYPE is telescopic, else flat
+        # fallback (existing fields unchanged either way).
+        _slabs = getattr(config, "TARIFF_SLABS", None)
+        _ttype = str(getattr(config, "TARIFF_TYPE", "telescopic") or "telescopic").lower()
+        _slab_rs = None
+        _using_slabs = False
+        if _slabs and _ttype == "telescopic" and month_kwh is not None:
+            _slab_rs = telescopic_slab_bill(month_kwh, _slabs)
+            if _slab_rs is not None:
+                _using_slabs = True
+        if _slab_rs is None and month_kwh is not None:
+            _slab_rs = month_kwh * tariff
         impact = {
             "enabled": True,
             "tariff": tariff,
@@ -1539,9 +1670,37 @@ def get_generation_summary() -> dict:
                 _round(lifetime * co2_factor) if lifetime is not None else None
             ),
             "this_year_co2_t": _round(year_kwh * co2_factor / 1000.0),
+            "bill_estimate": {
+                "kwh": _round(month_kwh),
+                "rs": _round(_slab_rs),
+                "using_slabs": _using_slabs,
+            },
         }
     else:
         impact = {"enabled": False}
+
+    # --- Plant capacity: specific yield + capacity factor ------------------
+    # Explicitly NOT true Performance Ratio (needs pyranometer) -- see
+    # tooltip/README; v2 could use Open-Meteo radiation.
+    # specific_yield = kwh / kwp, capacity_factor = today_kwh / (kwp * 24).
+    # Null when kwp unset (<= 0) or when the kwh side has no data yet.
+    try:
+        kwp_raw = float(config.PLANT_CAPACITY_KWP)
+    except (TypeError, ValueError):
+        kwp_raw = 0.0
+    if kwp_raw is not None and kwp_raw > 0:
+        kwp = float(kwp_raw)
+        capacity = {
+            "kwp": kwp,
+            "today_kwh_per_kwp": _round(today_kwh / kwp) if today_kwh is not None else None,
+            "month_kwh_per_kwp": _round(month_kwh / kwp) if month_kwh is not None else None,
+            "capacity_factor_today_pct": (
+                _round(today_kwh / (kwp * 24.0) * 100.0)
+                if today_kwh is not None else None
+            ),
+        }
+    else:
+        capacity = None
 
     return {
         "today": _round(today_kwh),
@@ -1555,6 +1714,8 @@ def get_generation_summary() -> dict:
         # The inverter's own running counter, straight from the newest read.
         "inverter_lifetime": _round(lifetime_kwh),
         "impact": impact,
+        "capacity": capacity,
+        "deltas": deltas,
     }
 
 

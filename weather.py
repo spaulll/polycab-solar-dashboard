@@ -35,6 +35,10 @@ CACHE_TTL: float = float(900)   # 15 minutes
 
 _cache: dict = {"data": None, "fetched_at": 0.0}
 
+TOMORROW_TTL: float = float(3600)  # 1 hour
+
+_tomorrow_cache: dict = {"data": None, "fetched_at": 0.0}
+
 # Common icon vocabulary shared by both providers' code mappings.
 ICONS = ("sun", "partly-cloudy", "cloudy", "fog", "drizzle", "rain",
          "snow", "thunder")
@@ -224,6 +228,265 @@ def _fetch_openweathermap() -> dict:
         "low": round(min([main["temp_min"], *lows]), 1) if lows else round(main["temp_min"], 1),
         "forecast": forecast,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tomorrow estimate (provider-agnostic daylight derate of the typical day)
+# ---------------------------------------------------------------------------
+def _tomorrow_daylight_window(tomorrow_local):
+    """(sunrise_aware, sunset_aware) for tomorrow via inverter sun math."""
+    import inverter as _inv  # deferred: avoids import cycles at module load
+    info = _inv.get_day_sun(tomorrow_local)
+    sunrise = datetime.datetime.fromisoformat(info["sunrise"])
+    sunset = datetime.datetime.fromisoformat(info["sunset"])
+    return sunrise, sunset
+
+
+def _tomorrow_typical():
+    """(typical_total_kwh|None, day_count) from the 15-min typical-day curve."""
+    import solar as _solar  # deferred: solar imports database/inverter
+    try:
+        proj = _solar.get_today_projection()
+    except Exception:
+        return None, 0
+    typical = proj.get("typical_total_kwh")
+    try:
+        day_count = int(proj.get("day_count") or 0)
+    except (TypeError, ValueError):
+        day_count = 0
+    if typical is None:
+        return None, day_count
+    try:
+        return float(typical), day_count
+    except (TypeError, ValueError):
+        return None, day_count
+
+
+def _derate_expected(typical_kwh: float, cloud_frac: float, pop_frac: float):
+    """
+    Shared method (both providers):
+        expected = typical_total x (1 - 0.7 x cloud_frac) - rain_penalty,
+        clamped >= 0, where rain_penalty = typical_total x 0.3 x pop_frac.
+    """
+    try:
+        rain_penalty = typical_kwh * 0.3 * max(0.0, min(1.0, float(pop_frac)))
+        expected = typical_kwh * (1.0 - 0.7 * max(0.0, min(1.0, float(cloud_frac)))) - rain_penalty
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, expected)
+
+
+def _tomorrow_via_open_meteo(tomorrow_local, sunrise, sunset, typical_kwh):
+    """Mean daylight cloud/pop for tomorrow via Open-Meteo hourly."""
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+    except ImportError:
+        _ZI = None
+    try:
+        tz = _ZI(config.TIMEZONE) if _ZI is not None else None
+    except Exception:
+        tz = None
+
+    day_iso = tomorrow_local.isoformat()
+    params = urllib.parse.urlencode({
+        "latitude": config.LATITUDE,
+        "longitude": config.LONGITUDE,
+        "timezone": config.TIMEZONE,
+        "hourly": ",".join(["cloud_cover", "precipitation_probability", "shortwave_radiation"]),
+        "start_date": day_iso,
+        "end_date": day_iso,
+    })
+    data = _http_get_json(f"https://api.open-meteo.com/v1/forecast?{params}")
+    hourly = data.get("hourly") or {}
+    times = hourly.get("time") or []
+    clouds = hourly.get("cloud_cover") or []
+    pops = hourly.get("precipitation_probability") or []
+
+    c_vals, p_vals = [], []
+    for i, t in enumerate(times):
+        try:
+            # Hourly times are location-local ISO without offset.
+            naive = datetime.datetime.fromisoformat(t)
+            aware = naive.replace(tzinfo=tz) if tz is not None else naive.replace(tzinfo=datetime.timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        # Compare in a common frame (UTC) so naive-vs-aware never slips.
+        try:
+            a_utc = aware.astimezone(datetime.timezone.utc) if aware.tzinfo is not None else aware
+            sr_utc = sunrise.astimezone(datetime.timezone.utc)
+            ss_utc = sunset.astimezone(datetime.timezone.utc)
+        except Exception:
+            continue
+        if not (sr_utc <= a_utc <= ss_utc):
+            continue
+        try:
+            if i < len(clouds) and clouds[i] is not None:
+                c_vals.append(float(clouds[i]))
+            if i < len(pops) and pops[i] is not None:
+                p_vals.append(float(pops[i]))
+        except (TypeError, ValueError):
+            continue
+    if not c_vals:
+        return None
+    cloud_frac = (sum(c_vals) / len(c_vals)) / 100.0
+    pop_frac = (sum(p_vals) / len(p_vals) / 100.0) if p_vals else 0.0
+    expected = _derate_expected(typical_kwh, cloud_frac, pop_frac)
+    if expected is None:
+        return None
+    return {
+        "cloud_pct": round(cloud_frac * 100.0, 1),
+        "pop": round(pop_frac * 100.0, 1),
+        "expected_kwh": round(expected, 2),
+        "provider": "open-meteo",
+    }
+
+
+def _tomorrow_via_owm(tomorrow_local, sunrise, sunset, typical_kwh):
+    """Mean daylight cloud/pop for tomorrow via OWM 3-hour forecast."""
+    lat, lon = config.LATITUDE, config.LONGITUDE
+    key = config.OPENWEATHER_API_KEY
+    if not key:
+        return None
+    base = "https://api.openweathermap.org"
+    fc = _http_get_json(
+        f"{base}/data/2.5/forecast?lat={lat}&lon={lon}&appid={key}&units=metric")
+
+    city_offset = ((fc.get("city") or {}).get("timezone", 0)) or 0
+    try:
+        sr_epoch = sunrise.timestamp()
+        ss_epoch = sunset.timestamp()
+    except Exception:
+        return None
+
+    c_vals, p_vals = [], []
+    for entry in fc.get("list", []) or []:
+        try:
+            dt_epoch = int(entry.get("dt", 0))
+        except (TypeError, ValueError):
+            continue
+        # City-local date (epoch + offset pattern already used in code).
+        local_date = datetime.datetime.fromtimestamp(
+            dt_epoch + city_offset, datetime.timezone.utc).date()
+        if local_date != tomorrow_local:
+            continue
+        if not (sr_epoch <= dt_epoch <= ss_epoch):
+            continue
+        try:
+            clouds = (entry.get("clouds") or {}).get("all")
+            if clouds is not None:
+                c_vals.append(float(clouds))
+            pop = entry.get("pop", 0)
+            p_vals.append(float(pop) * 100.0 if float(pop) <= 1.0 else float(pop))
+        except (TypeError, ValueError):
+            continue
+    if not c_vals:
+        return None
+    cloud_frac = (sum(c_vals) / len(c_vals)) / 100.0
+    # OWM pop is 0..1 fraction; normalize defensively (already x100 above).
+    pop_mean = (sum(p_vals) / len(p_vals)) if p_vals else 0.0
+    pop_frac = (pop_mean / 100.0) if pop_mean > 1.0 else pop_mean
+    expected = _derate_expected(typical_kwh, cloud_frac, pop_frac)
+    if expected is None:
+        return None
+    return {
+        "cloud_pct": round(cloud_frac * 100.0, 1),
+        "pop": round(pop_frac * 100.0, 1),
+        "expected_kwh": round(expected, 2),
+        "provider": "openweathermap",
+    }
+
+
+def get_tomorrow_estimate(force: bool = False) -> dict:
+    """
+    Expected tomorrow kWh via provider-agnostic daylight derate of the
+    typical day: expected = typical_total x (1 - 0.7 x cloud_frac) -
+    rain_penalty, clamped >= 0 (rain_penalty = typical_total x 0.3 x pop).
+
+    Daylight-only: forecast hours filtered to tomorrow's sunrise->sunset
+    from inverter.get_day_sun(tomorrow) so night clouds don't dilute.
+    day_count < 3 -> expected None -> UI hides (same honesty rule as pace).
+    1h TTL. Never raises for provider issues — returns nulls so the UI can
+    degrade to `collecting data…` instead of erroring.
+    """
+    if not force and _tomorrow_cache["data"] is not None \
+            and (time.monotonic() - _tomorrow_cache["fetched_at"]) < TOMORROW_TTL:
+        return _tomorrow_cache["data"]
+
+    # Tomorrow in the configured location (not the server's system date).
+    try:
+        import inverter as _inv
+        tz = _inv.local_tz()
+        today_local = datetime.datetime.now(tz).date()
+        tomorrow_local = today_local + datetime.timedelta(days=1)
+    except Exception:
+        tomorrow_local = datetime.date.today() + datetime.timedelta(days=1)
+
+    typical_kwh, day_count = _tomorrow_typical()
+    date_iso = tomorrow_local.isoformat()
+
+    def _nulls(provider=None):
+        return {
+            "date": date_iso,
+            "expected_kwh": None,
+            "typical_kwh": round(typical_kwh, 2) if typical_kwh is not None else None,
+            "cloud_pct": None,
+            "pop": None,
+            "provider": provider,
+            "day_count": day_count,
+        }
+
+    # Not enough history to call any day "typical".
+    if day_count < 3 or typical_kwh is None:
+        data = _nulls(provider=None)
+        _tomorrow_cache["data"] = data
+        _tomorrow_cache["fetched_at"] = time.monotonic()
+        return data
+
+    try:
+        sunrise, sunset = _tomorrow_daylight_window(tomorrow_local)
+    except Exception as e:
+        print(f"[FORECAST] sun window failed: {e!r}")
+        data = _nulls(provider=None)
+        _tomorrow_cache["data"] = data
+        _tomorrow_cache["fetched_at"] = time.monotonic()
+        return data
+
+    result = None
+    # OWM primary when keyed, Open-Meteo fallback (works keyed AND unkeyed).
+    if config.OPENWEATHER_API_KEY:
+        try:
+            result = _tomorrow_via_owm(tomorrow_local, sunrise, sunset, typical_kwh)
+        except Exception as e:
+            print(f"[FORECAST] openweathermap tomorrow failed: {e!r}")
+            result = None
+        if result is None:
+            try:
+                result = _tomorrow_via_open_meteo(tomorrow_local, sunrise, sunset, typical_kwh)
+            except Exception as e:
+                print(f"[FORECAST] open-meteo fallback failed: {e!r}")
+                result = None
+    else:
+        try:
+            result = _tomorrow_via_open_meteo(tomorrow_local, sunrise, sunset, typical_kwh)
+        except Exception as e:
+            print(f"[FORECAST] open-meteo tomorrow failed: {e!r}")
+            result = None
+
+    if result is None:
+        data = _nulls(provider=None)
+    else:
+        data = {
+            "date": date_iso,
+            "expected_kwh": result["expected_kwh"],
+            "typical_kwh": round(typical_kwh, 2),
+            "cloud_pct": result["cloud_pct"],
+            "pop": result["pop"],
+            "provider": result["provider"],
+            "day_count": day_count,
+        }
+    _tomorrow_cache["data"] = data
+    _tomorrow_cache["fetched_at"] = time.monotonic()
+    return data
 
 
 # ---------------------------------------------------------------------------

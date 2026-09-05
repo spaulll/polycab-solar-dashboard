@@ -3,7 +3,7 @@
 // when data is unavailable the chip shows "–°" and the popup stays closed.
 
 import { WEATHER_REFRESH_MS } from './config.js';
-import { fetchWeather } from './api.js';
+import { fetchWeather, fetchTomorrowForecast } from './api.js';
 
 const el = id => document.getElementById(id);
 
@@ -74,6 +74,39 @@ function render(w){
 
   el('wcProvider').textContent =
     `via ${w.provider === 'openweathermap' ? 'OpenWeatherMap' : 'Open-Meteo'}`;
+
+  // Tomorrow estimate loads separately (same cadence); render honestly.
+  loadTomorrowIntoPopup();
+}
+
+function renderTomorrowPopup(t){
+  const node = el('wcTomorrow');
+  if(!node) return;
+  const ok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
+    && t.typical_kwh !== null && t.typical_kwh !== undefined
+    && (t.day_count ?? 0) >= 3;
+  if(!ok){
+    node.hidden = false;
+    node.textContent = 'Tomorrow: collecting data…';
+    node.title = 'Needs 3+ days of history and a daylight forecast. Night/empty history degrades honestly.';
+    return;
+  }
+  const exp = Number(t.expected_kwh).toFixed(1);
+  const typ = Number(t.typical_kwh).toFixed(1);
+  const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
+    ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
+  node.hidden = false;
+  node.textContent = `Tomorrow ≈ ${exp} kWh (typical ${typ}${cloud})`;
+  node.title = `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`;
+}
+
+async function loadTomorrowIntoPopup(){
+  try{
+    renderTomorrowPopup(await fetchTomorrowForecast());
+  }catch(e){
+    console.error('Failed to load tomorrow forecast', e);
+    renderTomorrowPopup(null);
+  }
 }
 
 // Forecast times are local ISO strings ("2026-08-24T13:00:00") or HH:MM.
@@ -91,6 +124,8 @@ async function loadWeather(){
     console.error('Failed to load weather', e);
     render(null);
   }
+  // Popup tomorrow row refreshes on the same weather cadence.
+  loadTomorrowIntoPopup();
 }
 
 // ---------- Popup open/close ----------

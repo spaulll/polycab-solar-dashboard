@@ -300,6 +300,7 @@
     </div>
     <p class="panel-subtitle glance-pace" id="paceTag" hidden></p>
     <div class="pace-bar" aria-hidden="true"><span id="paceFill"></span></div>
+    <p class="panel-subtitle glance-tomorrow" id="tomorrowTag" hidden></p>
     <div class="glance-bar" aria-hidden="true"><span id="glanceFill"></span></div>
   </div>
 
@@ -459,6 +460,7 @@
     <article class="gen-card">
       <h2 class="gen-label">Today</h2>
       <p class="gen-value accent"><span class="num" id="genToday">–</span><span class="unit"></span></p>
+      <p class="gen-sub" id="genTodaySub" hidden></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">Yesterday</h2>
@@ -467,14 +469,18 @@
     <article class="gen-card">
       <h2 class="gen-label">This Week</h2>
       <p class="gen-value"><span class="num" id="genWeek">–</span><span class="unit"></span></p>
+      <p class="gen-delta" id="genWeekDelta" hidden></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">This Month</h2>
       <p class="gen-value"><span class="num" id="genMonth">–</span><span class="unit"></span></p>
+      <p class="gen-sub" id="genMonthSub" hidden></p>
+      <p class="gen-delta" id="genMonthDelta" hidden></p>
     </article>
     <article class="gen-card">
       <h2 class="gen-label">This Year</h2>
       <p class="gen-value"><span class="num" id="genYear">–</span><span class="unit"></span></p>
+      <p class="gen-delta" id="genYearDelta" hidden></p>
     </article>
     <article class="gen-card wide" title="Small differences are normal. Calculated Production is the sum of daily totals stored in this dashboard, while Inverter Lifetime is the running total reported directly by the inverter. Gaps can come from partial days, reset timing, rounding, or data recorded before the dashboard started.">
       <h2 class="gen-label">Calculated Production</h2>
@@ -510,6 +516,30 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"/></svg>
             Export CSV
           </button>
+        </div>
+      </div>
+
+      <!-- Year heatmap: GitHub-style daily-yield calendar (pure HTML/CSS).
+           Reuses the daily-summary series; gap days stay blank. -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-head-main">
+            <h3 class="panel-title">Year Heatmap</h3>
+            <p class="panel-subtitle" id="heatmapNote" hidden></p>
+          </div>
+          <select id="heatmapYear" aria-label="Year"></select>
+        </div>
+        <div class="heatmap-scroll">
+          <div class="heatmap-grid" id="heatmapGrid" role="img" aria-label="Daily yield calendar"></div>
+        </div>
+        <div class="heatmap-legend" aria-hidden="true">
+          <span>Less</span>
+          <span class="hm-day lv0"></span>
+          <span class="hm-day lv1"></span>
+          <span class="hm-day lv2"></span>
+          <span class="hm-day lv3"></span>
+          <span class="hm-day lv4"></span>
+          <span>More</span>
         </div>
       </div>
 
@@ -573,6 +603,7 @@
 
     </aside>
   </div>
+  <p class="db-health" id="dbHealth" hidden></p>
 
   </section>
 
@@ -667,6 +698,10 @@
               <dt>This Year</dt>
               <dd id="impactYear">–</dd>
             </div>
+            <div class="meta-row" id="billRow" hidden>
+              <dt>Est. bill offset</dt>
+              <dd id="impactBill">–</dd>
+            </div>
             <div class="meta-row">
               <dt>CO₂ Avoided</dt>
               <dd id="impactCO2">–</dd>
@@ -754,6 +789,7 @@
       <div><dt>High / Low</dt><dd id="wcHiLo">–</dd></div>
     </dl>
     <div class="weather-forecast" id="wcForecast"></div>
+    <p class="weather-tomorrow" id="wcTomorrow" hidden></p>
     <p class="weather-provider" id="wcProvider"></p>
   </div>
 </div>

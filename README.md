@@ -97,7 +97,9 @@ solar-dashboard/
     │   ├── temperature.js    # Temperature panel (stats rows, lens toggle, derating note)
     │   ├── correlation.js    # Weather Impact panel (coverage guard, lens toggle)
     │   ├── errors.js         # Error-history counter + popup (bounded server-side log, WS-fed live)
-    │   ├── weather.js        # Weather chip + popup card / draggable bottom sheet
+    │   ├── weather.js        # Weather chip + popup card / draggable bottom sheet (+ tomorrow row)
+    │   ├── dbhealth.js       # DB health footer line in Trends (size/readings/cleanup/retention)
+    │   ├── heatmap.js        # Year heatmap calendar (pure HTML/CSS grid, year selector)
     │   └── format.js         # Number/date formatting helpers
     └── vendor/                 # Locally-vendored Chart.js + date adapter (no CDN dependency)
 ```
@@ -143,6 +145,23 @@ The **Savings & Impact** panel is driven by three settings: `ELECTRICITY_TARIFF`
 average). Savings are always computed live as generated kWh × the current
 tariff — past rates are not stored, so changing the value recomputes every
 figure. Setting `ELECTRICITY_TARIFF=0` hides the panel entirely.
+
+Optional **slab billing** (`TARIFF_SLABS` JSON + `TARIFF_TYPE=telescopic`):
+a generic telescopic (incremental) engine estimates this month's bill offset
+from generated kWh, e.g. WBSEDCL Urban A(DM-U) 2025-26
+`[{"upto":34,"rate":5.04},{"upto":60,"rate":6.33},{"upto":100,"rate":7.12},
+{"upto":200,"rate":7.52},{"upto":300,"rate":7.69},{"upto":null,"rate":9.22}]`
+(WBERC order 20.03.2025, eff. 01.04.2025 — confirm Urban vs Rural against your
+bill; fixed charges/MVCA not included). Empty/invalid slabs keep flat
+`ELECTRICITY_TARIFF` behavior unchanged; the panel row reads
+`Est. bill offset ₹X (Y kWh @ slabs)` with a tooltip stating rates are
+user-configured estimates.
+
+**Plant capacity** (`PLANT_CAPACITY_KWP=3.125` for 625W × 5): enables specific
+yield (kWh/kWp) sub-lines under Today/Month (`3.9 kWh/kWp · CF 5.2%`) plus a
+live `% of kWp` line in Today-at-a-glance. Explicitly NOT true Performance
+Ratio (needs a pyranometer); the gauge dial stays on `INVERTER_RATED_W=3600`.
+Unset/0 hides the whole block.
 
 `OPENWEATHER_API_KEY` is optional: when set, OpenWeatherMap is used as the
 primary weather provider for the top bar; when missing or empty, the
@@ -273,6 +292,35 @@ directory (path controlled by `DB_PATH`). The schema is created via
   and refreshed on the same cadence as the Daily Energy Log (every
   `DAILY_SUMMARY_REFRESH_MS`, day mode only), plus immediately when the
   inverter wakes up from night mode.
+  - **WoW/MoM deltas**: Week/Month (/Year when cheap) carry `▲ +12% vs last
+    week` tags. Week compares Mon→today vs the same N elapsed days last week;
+    month compares 1st→today vs the same day-numbers last month (year likewise
+    Jan 1→today). Equal elapsed windows only; any missing day in either window
+    (or a ≤0 baseline) hides the tag instead of fabricating zeros. Tags use
+    arrow + text + color (never color-only); tooltips carry absolute kWh.
+  - **Capacity metrics**: with `PLANT_CAPACITY_KWP` set, Today shows
+    `kWh/kWp · CF %` (specific yield + capacity factor = today ÷ (kWp×24)),
+    Month shows `kWh/kWp`, and glance shows live `% of kWp`. NOT true
+    Performance Ratio (stated in tooltips); hidden when unset.
+- **DB health line**: one muted footer line in Trends below Monthly/Weather
+  (`84 MB · 120k readings · last cleanup 03:00 · keeps 60d`) from
+  `GET /api/db-status` (size, row counts, last maintenance, retention).
+  Refreshes on the daily-summary cadence; missing/null degrades to `–`.
+- **Year heatmap**: GitHub-style daily-yield calendar below Daily Log (pure
+  HTML/CSS, no Chart.js) reusing the daily-summary series. Year selector
+  defaults to the current year, lists prior years with data, persists via
+  `heatmapYear`; gap days stay blank (never zero-filled); tooltips `date ·
+  kWh`; horizontal scroll internally on phones with no page overflow.
+- **Tomorrow forecast** (`GET /api/forecast/tomorrow`, 1h TTL): provider-
+  agnostic daylight derate of the typical day —
+  `expected = typical × (1 − 0.7 × cloud) − rain_penalty` (rain = typical ×
+  0.3 × pop), clamped ≥0, filtered to tomorrow's sunrise→sunset so night
+  clouds don't dilute. OpenWeatherMap 3-hour entries when keyed, otherwise
+  Open-Meteo hourly (works keyed AND unkeyed). Shown in the weather popup
+  (`Tomorrow ≈ X kWh (typical Y, cloudy Z%)`) + a muted glance sub-line.
+  `<3 days` history, provider fail or empty forecast degrades to
+  `collecting data…`/hidden. Limits: estimated from clouds only (no
+  radiation/temperature model yet); confirm against metered yield.
 
 - **Savings & Impact panel**: the last sidebar panel (below Insights), one
   primary figure — lifetime money saved — over three muted rows: This Month,
@@ -345,7 +393,7 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/history/solar-profile?bin_minutes=M` | Long-term average power vs position within the solar day, aggregated server-side over all history (powers the All view; distinct from daily totals). Cached in-process per bin size for 15 minutes — the underlying history only grows on the scale of days |
 | `GET /api/today/projection` | Today's projected finish: live `E_Today` plus the expected remainder of the solar day according to the long-term average-day profile. Returns `current_kwh`, `projected_final_kwh`, `typical_total_kwh`, `pace_ratio` (live ÷ expected-so-far), `now_offset_seconds`, `day_count` (real history days; the UI hides the feature below 3) and the typical-day curve `[{o: seconds after sunrise, w: avg AC watts}]` for the dashed chart overlay. After sunset the projection freezes at the actual final vs the typical total; before the first reading of the day the live fields are `null` rather than 0. Backs the Today view's typical-day overlay and pace tag |
 | `GET /api/daily-summary` | Max `E_Today` per calendar day, ordered ascending (backs the Daily Energy Log bar chart and the Cumulative Energy running-total line chart; the running total is computed client-side from this same aggregated series) |
-| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries an `impact{}` block for the Savings & Impact panel (`tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂ kg/t, computed live at the current rates; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the dashboard's Generation KPI strip |
+| `GET /api/generation/summary` | Generation KPIs in kWh: `today`, `yesterday`, `this_week` (Monday–today, ISO week), `this_month`, `this_year`, plus two lifetime figures — `calculated_total` (sum of stored daily `energy_kwh`, with today's live value included via on-the-fly grouping) and `inverter_lifetime` (the newest `E_Total` counter reading). Completed days come from `readings_daily.energy_kwh` (max `E_Today`) plus still-raw days grouped on the fly; **today** always uses the live max `E_Today` since local midnight (per `TIMEZONE`) straight from raw readings. The two lifetime figures can differ slightly — see below. Also carries `impact{}` (Savings & Impact: `tariff`, `currency`, `co2_factor`, lifetime/month/year kWh + ₹ + CO₂, plus `bill_estimate{kwh,rs,using_slabs}` for this month via the telescopic slab engine or flat fallback; **lifetime** follows the inverter's `E_Total` counter, month/year the stored day buckets), `capacity{kwp,today_kwh_per_kwp,month_kwh_per_kwp,capacity_factor_today_pct}` (null when `PLANT_CAPACITY_KWP` unset; NOT true Performance Ratio) and `deltas{week_pct,month_pct,year_pct + current/prev kWh}` (equal elapsed windows; null when history insufficient). When `ELECTRICITY_TARIFF` is unset or ≤ 0 it returns `{"enabled": false}` so the UI hides the panel. Backs the KPI strip + deltas + capacity + bill estimate |
 | `GET /api/generation/stats?from=YYYY-MM-DD&to=YYYY-MM-DD` | Range-selectable yield stats over `[from, to]`: `days` (only days that actually have data count), `total_kwh`, `average_daily_kwh`, and `best_day`/`worst_day` as `{date, kwh}`. Validation: `to` must be ≤ today (local) and `from` ≥ the first day present in the database — violations return `{"error": ...}`. When omitted, defaults to the last 30 days ending today. Every response echoes `min_date`/`max_date` (the full available range, `min_date` = first day with data, `max_date` = today) so the frontend can constrain its date pickers. Backs the Average Daily Yield card |
 | `GET /api/generation/monthly?months=N` | Monthly energy totals in kWh (`{month: "YYYY-MM", kwh, days_with_data}`, ascending), bucketed server-side from the exact same day series as the Daily Energy Log / KPI strip — a month's total always equals the sum of that month's daily bars. Also returns `first_month` (earliest month with data across all history) and `yoy_available` (true once a same-month-last-year pair exists, i.e. ≥ 13 months of history). `months` selects the most recent N months to return (default 24); `days_with_data` lets gap months be annotated instead of silently averaged. Backs the Monthly Energy chart |
 | `GET /api/insights/temperature?bin_minutes=M` | Inverter temperature analytics over **daylight readings only** (same sun-window join as the solar profile; night residuals never count). Returns `by_time_of_day` (avg/max internal temperature vs seconds-after-sunrise bins), `by_output` (readings banded by DC solar input in 100 W bands with avg/max temperature, avg AC power and the energy-weighted DC→AC efficiency `SUM(P_ac)/SUM(P_dc)` per band — reveals derating at high output + heat) and `records` (today's max from the sunrise cutoff, all-time max and hottest day `{date, temp_max}` spanning all history via permanent daily aggregates). Implausible samples (< −20 °C or > 110 °C, e.g. a stuck sensor) are filtered defensively. The time-of-day profile covers the raw retention window only; cached in-process per bin size for 15 minutes. Backs the sidebar Temperature panel |
@@ -356,6 +404,8 @@ directory (path controlled by `DB_PATH`). The schema is created via
 | `GET /api/errors?limit=50` | Recent inverter error episodes, newest first (bounded `error_log` table; consecutive identical failures collapse into one episode). Also returns `retention_days` — the 7-day rotation window the Error History popup states in its subtitle |
 | `GET /api/sun` | Next sunrise/sunset times and countdowns, plus today's actual `sunrise`/`sunset` window (used by the Live view's sun-path arc) |
 | `GET /api/weather` | Current weather + a short forecast for the configured location, in a provider-agnostic normalized shape (`provider`, `temp`, `feels_like`, `humidity`, `wind_speed`, `condition`, `icon`, `cloud_cover`, `pop`, `high`/`low`, `forecast[]`). **Primary:** OpenWeatherMap (only when `OPENWEATHER_API_KEY` is set); **fallback:** Open-Meteo — no key required, used automatically whenever OWM is unconfigured or fails. Cached in-memory for 15 minutes. Returns `502 {"detail": ...}` when every provider fails |
+| `GET /api/forecast/tomorrow` | Expected tomorrow kWh (`{date,expected_kwh,typical_kwh,cloud_pct,pop,provider,day_count}`) via daylight derate of the typical day (1h TTL; works keyed AND unkeyed; `day_count<3`/fail/empty → `expected_kwh` null). Backs the weather-popup row + glance sub-line |
+| `GET /api/db-status` | Database health: `size_mb`, `row_counts{readings,readings_hourly,readings_daily,readings_weather_daily}`, `last_maintenance`, `retention_days`, `total_powercuts`. Backs the muted Trends footer line |
 | `WS /ws` | Live reading/status broadcast |
 
 ## Notes

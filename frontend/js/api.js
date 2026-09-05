@@ -72,6 +72,10 @@ function fetchGenerationStats(fromDay, toDay){
   return getJSON(path);
 }
 
+function fetchDbStatus(){
+  return getJSON('/api/db-status');
+}
+
 function fetchStatus(){
   return getJSON('/api/status');
 }
@@ -105,6 +109,11 @@ function fetchWeather(){
   return getJSON('/api/weather');
 }
 
+// Expected tomorrow kWh (provider-agnostic daylight derate of typical day).
+function fetchTomorrowForecast(){
+  return getJSON('/api/forecast/tomorrow');
+}
+
 function csvExportURL(range){
   return `${API_BASE}/api/export?range=${range}`;
 }
@@ -121,6 +130,8 @@ export {
   fetchGenerationMonthly,
   fetchGenerationStats,
   fetchWeatherCorrelation,
+  fetchDbStatus,
+  fetchTomorrowForecast,
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,
