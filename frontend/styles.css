@@ -1267,9 +1267,29 @@ select:hover{ color: var(--text); }
   .heatmap-legend{ padding: 6px 14px 12px; }
 }
 
-/* Year heatmap as the last full-width card in Trends (spans both columns
-   below the two-column workspace, above the DB health line). */
-.heatmap-full{ margin-top: 16px; }
+/* Bottom row in Trends: heatmap card fitted to its grid beside a system
+   card that fills the rest. Stacks to one column where the pair cannot
+   sit side by side. */
+.heatmap-row{
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
+}
+
+.heatmap-fit{
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sys-card .db-health{
+  margin: 0;
+}
+
+@media (max-width: 1020px){
+  .heatmap-row{ grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ==========================================================================
    Live output gauge + inverter mood — two balanced cards side by side
