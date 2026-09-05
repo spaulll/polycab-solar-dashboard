@@ -53,6 +53,58 @@ def _env_bool(name: str, default: bool) -> bool:
     return os.environ.get(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _env_slabs(name: str):
+    """
+    Telescopic slab parser for TARIFF_SLABS JSON env, e.g.
+    [{"upto":34,"rate":5.04},{"upto":60,"rate":6.33},{"upto":null,"rate":9.22}].
+    Returns a normalized list [{upto: float|None, rate: float}] or None when
+    empty/invalid (caller falls back to flat ELECTRICITY_TARIFF). Rules:
+    non-empty list, each rate > 0, upto null only on the final slab, numeric
+    uptos strictly increasing.
+    """
+    import json as _json
+    raw = os.environ.get(name, "")
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(data, list) or not data:
+        return None
+    out = []
+    prev_upto = 0.0
+    for i, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            return None
+        upto = entry.get("upto")
+        rate = entry.get("rate")
+        try:
+            rate_f = float(rate)
+        except (TypeError, ValueError):
+            return None
+        if not (rate_f > 0):
+            return None
+        is_last = (i == len(data) - 1)
+        if upto is None:
+            if not is_last:
+                return None
+            upto_f = None
+        else:
+            try:
+                upto_f = float(upto)
+            except (TypeError, ValueError):
+                return None
+            if not (upto_f > prev_upto):
+                return None
+            prev_upto = upto_f
+        out.append({"upto": upto_f, "rate": rate_f})
+    return out
+
+
 # --- Modbus / Inverter connection ---
 INVERTER_IP: str = os.environ.get("INVERTER_IP", "192.168.1.100")
 MODBUS_PORT: int = _env_int("MODBUS_PORT", 502)
@@ -150,6 +202,20 @@ GRID_CO2_KG_PER_KWH: float = _env_float("GRID_CO2_KG_PER_KWH", 0.72)
 # Installed DC capacity in kWp, e.g. 3.125 for 5 x 625 W panels. 0/unset
 # hides the yield metrics entirely (no fabricated numbers).
 PLANT_CAPACITY_KWP: float = _env_float("PLANT_CAPACITY_KWP", 0.0)
+
+# --- Slab tariff (WBSEDCL generic telescopic engine) ---
+# TARIFF_SLABS is a JSON array of {upto, rate} slabs, e.g. Urban A(DM-U)
+# 2025-26 (WBERC order 20.03.2025, eff. 01.04.2025 — verify against your bill;
+# aggregators disagree on subsidised vs gross and urban vs rural, so this is
+# a user-correctable prefill, not hardcoded truth):
+# [{"upto":34,"rate":5.04},{"upto":60,"rate":6.33},{"upto":100,"rate":7.12},
+#  {"upto":200,"rate":7.52},{"upto":300,"rate":7.69},{"upto":null,"rate":9.22}]
+# (fixed ₹30/kVA + MVCA ~₹0.23 extra; rural slightly lower; Lifeline separate).
+# Empty/invalid -> flat ELECTRICITY_TARIFF fallback. TARIFF_TYPE selects the
+# engine; only "telescopic" (incremental per-slab) is supported — any other
+# or empty value also falls back to flat.
+TARIFF_TYPE: str = os.environ.get("TARIFF_TYPE", "telescopic").strip().lower() or "telescopic"
+TARIFF_SLABS = _env_slabs("TARIFF_SLABS")
 
 # --- Server ---
 HOST: str = os.environ.get("HOST", "0.0.0.0")

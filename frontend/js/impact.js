@@ -38,6 +38,22 @@ function render(summary){
   swapText(el('impactMonth'), fmtMoney(impact.this_month_inr, cur));
   swapText(el('impactYear'), fmtMoney(impact.this_year_inr, cur));
 
+  // Slab bill estimate for this month's kWh (telescopic engine when
+  // configured, else flat). Tooltip states rates are user-configured.
+  const bill = impact.bill_estimate;
+  const billRow = el('billRow');
+  if(bill && bill.rs !== null && bill.rs !== undefined && bill.kwh !== null){
+    if(billRow) billRow.hidden = false;
+    const mode = bill.using_slabs ? '@ slabs' : '@ flat';
+    swapText(el('impactBill'), `${fmtMoney(bill.rs, cur)} (${Number(bill.kwh).toFixed(1)} kWh ${mode})`);
+    el('impactBill').title =
+      'Estimated bill offset for this month’s generation. Rates are ' +
+      'user-configured estimates (WBSEDCL slabs or flat tariff) — confirm ' +
+      'Urban vs Rural against your bill; fixed charges/MVCA not included.';
+  }else{
+    if(billRow) billRow.hidden = true;
+  }
+
   const co2 = fmtCO2(impact.lifetime_co2_kg);
   swapText(el('impactCO2'), co2 ? `${co2[0]} ${co2[1]}` : '–');
 }

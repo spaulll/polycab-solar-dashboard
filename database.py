@@ -1400,6 +1400,56 @@ def get_daily_summary() -> list[dict]:
     return rows
 
 
+def telescopic_slab_bill(kwh: float, slabs: list) -> Optional[float]:
+    """
+    Telescopic (incremental) slab billing: each slab's rate applies only to
+    the units falling inside it, e.g. 50 kWh on
+    [{upto:34,rate:5.04},{upto:60,rate:6.33},...] =
+    34*5.04 + 16*6.33. Returns None for missing/invalid inputs (caller falls
+    back to flat tariff). Pure arithmetic, no I/O.
+    """
+    try:
+        remaining = float(kwh)
+    except (TypeError, ValueError):
+        return None
+    if remaining is None or remaining < 0:
+        return None
+    if not slabs:
+        return None
+    total = 0.0
+    prev_upto = 0.0
+    for slab in slabs:
+        try:
+            rate = float(slab["rate"])
+        except (TypeError, ValueError, KeyError):
+            return None
+        if not (rate > 0):
+            return None
+        upto = slab.get("upto")
+        if upto is None:
+            total += remaining * rate
+            remaining = 0.0
+            break
+        try:
+            upto_f = float(upto)
+        except (TypeError, ValueError):
+            return None
+        if not (upto_f > prev_upto):
+            return None
+        width = upto_f - prev_upto
+        take = min(remaining, width)
+        total += take * rate
+        remaining -= take
+        prev_upto = upto_f
+        if remaining <= 0:
+            break
+    # If consumption exceeds the last finite slab without a null tail, the
+    # config is incomplete — signal fallback instead of under-billing.
+    if remaining > 1e-9:
+        return None
+    return total
+
+
 def get_generation_summary() -> dict:
     """
     Generation KPIs in kWh:
@@ -1590,6 +1640,19 @@ def get_generation_summary() -> dict:
         # the same figure the KPI strip shows as Inverter Lifetime. Null
         # until the first e_total reading exists; no fabricated zeros.
         lifetime = lifetime_kwh
+        # Slab bill estimate for this month's kWh: telescopic engine when
+        # TARIFF_SLABS parses and TARIFF_TYPE is telescopic, else flat
+        # fallback (existing fields unchanged either way).
+        _slabs = getattr(config, "TARIFF_SLABS", None)
+        _ttype = str(getattr(config, "TARIFF_TYPE", "telescopic") or "telescopic").lower()
+        _slab_rs = None
+        _using_slabs = False
+        if _slabs and _ttype == "telescopic" and month_kwh is not None:
+            _slab_rs = telescopic_slab_bill(month_kwh, _slabs)
+            if _slab_rs is not None:
+                _using_slabs = True
+        if _slab_rs is None and month_kwh is not None:
+            _slab_rs = month_kwh * tariff
         impact = {
             "enabled": True,
             "tariff": tariff,
@@ -1607,6 +1670,11 @@ def get_generation_summary() -> dict:
                 _round(lifetime * co2_factor) if lifetime is not None else None
             ),
             "this_year_co2_t": _round(year_kwh * co2_factor / 1000.0),
+            "bill_estimate": {
+                "kwh": _round(month_kwh),
+                "rs": _round(_slab_rs),
+                "using_slabs": _using_slabs,
+            },
         }
     else:
         impact = {"enabled": False}
