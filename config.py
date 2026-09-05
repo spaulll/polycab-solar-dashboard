@@ -146,6 +146,11 @@ CURRENCY_SYMBOL: str = os.environ.get("CURRENCY_SYMBOL", "₹").strip() or "₹"
 # it can track future revisions.
 GRID_CO2_KG_PER_KWH: float = _env_float("GRID_CO2_KG_PER_KWH", 0.72)
 
+# --- Plant capacity (specific yield + capacity factor) ---
+# Installed DC capacity in kWp, e.g. 3.125 for 5 x 625 W panels. 0/unset
+# hides the yield metrics entirely (no fabricated numbers).
+PLANT_CAPACITY_KWP: float = _env_float("PLANT_CAPACITY_KWP", 0.0)
+
 # --- Server ---
 HOST: str = os.environ.get("HOST", "0.0.0.0")
 PORT: int = _env_int("PORT", 8000)

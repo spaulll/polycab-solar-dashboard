@@ -1543,6 +1543,29 @@ def get_generation_summary() -> dict:
     else:
         impact = {"enabled": False}
 
+    # --- Plant capacity: specific yield + capacity factor ------------------
+    # Explicitly NOT true Performance Ratio (needs pyranometer) -- see
+    # tooltip/README; v2 could use Open-Meteo radiation.
+    # specific_yield = kwh / kwp, capacity_factor = today_kwh / (kwp * 24).
+    # Null when kwp unset (<= 0) or when the kwh side has no data yet.
+    try:
+        kwp_raw = float(config.PLANT_CAPACITY_KWP)
+    except (TypeError, ValueError):
+        kwp_raw = 0.0
+    if kwp_raw is not None and kwp_raw > 0:
+        kwp = float(kwp_raw)
+        capacity = {
+            "kwp": kwp,
+            "today_kwh_per_kwp": _round(today_kwh / kwp) if today_kwh is not None else None,
+            "month_kwh_per_kwp": _round(month_kwh / kwp) if month_kwh is not None else None,
+            "capacity_factor_today_pct": (
+                _round(today_kwh / (kwp * 24.0) * 100.0)
+                if today_kwh is not None else None
+            ),
+        }
+    else:
+        capacity = None
+
     return {
         "today": _round(today_kwh),
         "yesterday": _round(yesterday_kwh),
@@ -1555,6 +1578,7 @@ def get_generation_summary() -> dict:
         # The inverter's own running counter, straight from the newest read.
         "inverter_lifetime": _round(lifetime_kwh),
         "impact": impact,
+        "capacity": capacity,
     }
 
 

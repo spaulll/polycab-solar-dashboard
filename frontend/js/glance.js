@@ -4,7 +4,7 @@
 // "best today" must not move when the user browses 7D/All. All lookups are
 // guarded -- missing sources keep their placeholder.
 
-import { fetchPeakProduction } from './api.js';
+import { fetchPeakProduction, fetchGenerationSummary } from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -13,6 +13,11 @@ const $ = id => document.getElementById(id);
 let todayPeakW = null;
 let lastPeakFetch = 0;
 const PEAK_REFRESH_MS = 5 * 60 * 1000;
+
+// Installed capacity in kWp for the live % display (gauge dial stays on
+// INVERTER_RATED_W; this is text only). Null = feature hidden.
+let plantKwp = null;
+let lastCapacityFetch = 0;
 
 async function refreshTodayPeak(){
   try{
@@ -23,6 +28,17 @@ async function refreshTodayPeak(){
     }
   }catch(e){ /* keep the last known peak; fallback mirror below covers it */ }
   lastPeakFetch = Date.now();
+  syncNumbers();
+}
+
+async function refreshCapacity(){
+  try{
+    const summary = await fetchGenerationSummary();
+    const kwp = summary?.capacity?.kwp;
+    plantKwp = (kwp !== null && kwp !== undefined && Number(kwp) > 0)
+      ? Number(kwp) : null;
+  }catch(e){ /* keep last known; hidden when unset */ }
+  lastCapacityFetch = Date.now();
   syncNumbers();
 }
 
@@ -92,6 +108,22 @@ function syncNumbers(){
     if(nowW != null && peakW != null && peakW > 0) pct = Math.max(0, Math.min(1, nowW / peakW));
     fill.style.width = `${Math.round(pct * 100)}%`;
   }
+
+  // Live % of installed kWp (text only; gauge dial stays on rated W).
+  // Hidden entirely when capacity unset. Short `40% · 3.1 kWp` form keeps
+  // the 3-up glance grid overflow-free on 375px phones (full precision in
+  // the tooltip).
+  const nowSub = $('glanceNowSub');
+  if(nowSub){
+    if(plantKwp && nowW !== null && nowW > 0){
+      const pctCap = (nowW / (plantKwp * 1000)) * 100;
+      nowSub.textContent = `${Math.round(pctCap)}% · ${Number(plantKwp).toFixed(1)} kWp`;
+      nowSub.title = `Live output as % of installed DC capacity (${plantKwp} kWp). Gauge dial stays on inverter rating.`;
+    }else if(!plantKwp){
+      if(nowSub.textContent !== 'solar input') nowSub.textContent = 'solar input';
+      nowSub.removeAttribute('title');
+    }
+  }
 }
 
 function syncState(){
@@ -128,11 +160,13 @@ export function initGlance(){
     if(el) obs.observe(el, { childList: true, characterData: true, subtree: true });
   }
   // Fallback tick in case a renderer replaces nodes wholesale; the today
-  // peak refreshes on a slow tick alongside it.
+  // peak + capacity refresh on a slow tick alongside it.
   setInterval(() => {
     syncNumbers();
     syncState();
     if(Date.now() - lastPeakFetch > PEAK_REFRESH_MS) refreshTodayPeak();
+    if(Date.now() - lastCapacityFetch > PEAK_REFRESH_MS) refreshCapacity();
   }, 5000);
   refreshTodayPeak();
+  refreshCapacity();
 }

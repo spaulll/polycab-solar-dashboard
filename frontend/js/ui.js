@@ -128,6 +128,40 @@ function renderGenerationSummary(summary){
   const inv = fmtEnergyLocal(summary?.inverter_lifetime);
   tweenNumber(el('genInverterLifetime'), inv ? inv.n : null, inv ? inv.digits : 1);
   el('genInverterLifetimeUnit').textContent = inv ? ' ' + inv.unit : '';
+
+  // Plant capacity: specific yield (kWh/kWp) + capacity factor.
+  // Explicitly NOT true Performance Ratio (needs pyranometer) -- tooltip
+  // states it. Hidden entirely when capacity unset.
+  const cap = summary?.capacity;
+  const todaySub = el('genTodaySub');
+  const monthSub = el('genMonthSub');
+  if(cap && cap.kwp > 0){
+    if(todaySub){
+      const y = cap.today_kwh_per_kwp;
+      const cf = cap.capacity_factor_today_pct;
+      if(y !== null && y !== undefined && cf !== null && cf !== undefined){
+        todaySub.hidden = false;
+        todaySub.textContent = `${Number(y).toFixed(1)} kWh/kWp · CF ${Number(cf).toFixed(1)}%`;
+        todaySub.title = 'kWh per kWp installed — specific yield today. CF = today kWh ÷ (kWp × 24h). Not true Performance Ratio (needs pyranometer).';
+      }else{
+        todaySub.hidden = true;
+      }
+    }
+    if(monthSub){
+      const my = cap.month_kwh_per_kwp;
+      if(my !== null && my !== undefined){
+        monthSub.hidden = false;
+        monthSub.textContent = `${Number(my).toFixed(1)} kWh/kWp`;
+        monthSub.title = 'kWh per kWp installed — specific yield this month. Not true Performance Ratio (needs pyranometer).';
+      }else{
+        monthSub.hidden = true;
+      }
+    }
+  }else{
+    if(todaySub) todaySub.hidden = true;
+    if(monthSub) monthSub.hidden = true;
+  }
+
 }
 
 // ---------- Inverter status card ----------
