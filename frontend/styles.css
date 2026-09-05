@@ -1262,6 +1262,10 @@ select:hover{ color: var(--text); }
   .heatmap-legend{ padding: 6px 14px 12px; }
 }
 
+/* Year heatmap as the last full-width card in Trends (spans both columns
+   below the two-column workspace, above the DB health line). */
+.heatmap-full{ margin-top: 16px; }
+
 /* ==========================================================================
    Live output gauge + inverter mood — two balanced cards side by side
    ========================================================================== */
