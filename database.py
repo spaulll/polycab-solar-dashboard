@@ -1495,12 +1495,16 @@ def get_generation_summary() -> dict:
     month_kwh = 0.0
     year_kwh = 0.0
     days_sum = 0.0
+    series: dict = {}
     for r in list(permanent) + list(raw_days):
         try:
             d = datetime.strptime(r["day"], "%Y-%m-%d").date()
         except (TypeError, ValueError):
             continue
         energy = r["energy_kwh"] or 0.0
+        # Later rows overwrite earlier for the same day; permanent and raw
+        # windows are disjoint by construction (raw excludes permanent days).
+        series[d] = float(energy)
         days_sum += energy
         if d == yesterday:
             yesterday_kwh += energy
@@ -1513,6 +1517,70 @@ def get_generation_summary() -> dict:
 
     def _round(value):
         return round(value, 2) if value is not None else None
+
+    def _round1(value):
+        return round(value, 1) if value is not None else None
+
+    # --- WoW / MoM (/YoY) deltas: equal elapsed windows, honestly ----------
+    # Week: this Mon->today (N days) vs same N days last week.
+    # Month: 1st->today (N = today.day) vs same day-numbers last month.
+    # Year: Jan 1->today vs same day-numbers last year (cheap, same pattern).
+    # Null when history insufficient (any day in either window missing) or
+    # when the comparison baseline is <= 0 (avoids div-by-zero/infinite %).
+    def _window_pct(cur_dates: list, prev_dates: list):
+        for dd in cur_dates + prev_dates:
+            if dd not in series:
+                return None, None, None
+        cur = sum(series[dd] for dd in cur_dates)
+        prev = sum(series[dd] for dd in prev_dates)
+        if prev is None or prev <= 0:
+            return None, _round(cur), _round(prev)
+        pct = (cur - prev) / prev * 100.0
+        return _round1(pct), _round(cur), _round(prev)
+
+    # Week windows.
+    _n_week = (today - week_start).days + 1
+    _cur_week_dates = [week_start + timedelta(days=i) for i in range(_n_week)]
+    _prev_week_start = week_start - timedelta(days=7)
+    _prev_week_dates = [_prev_week_start + timedelta(days=i) for i in range(_n_week)]
+    week_pct, week_cur, week_prev = _window_pct(_cur_week_dates, _prev_week_dates)
+
+    # Month windows (same day-numbers last month).
+    _n_month = today.day
+    _cur_month_dates = [month_start + timedelta(days=i) for i in range(_n_month)]
+    try:
+        _prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
+        _prev_month_len = (month_start - _prev_month_start).days
+    except (ValueError, OverflowError):
+        _prev_month_start = None
+        _prev_month_len = 0
+    if _prev_month_start is not None and _prev_month_len >= _n_month:
+        _prev_month_dates = [_prev_month_start + timedelta(days=i) for i in range(_n_month)]
+        month_pct, month_cur, month_prev = _window_pct(_cur_month_dates, _prev_month_dates)
+    else:
+        month_pct, month_cur, month_prev = None, _round(month_kwh), None
+
+    # Year windows (same day-numbers last year).
+    try:
+        _prev_year_start = year_start.replace(year=year_start.year - 1)
+        _n_year = (today - year_start).days + 1
+        _cur_year_dates = [year_start + timedelta(days=i) for i in range(_n_year)]
+        _prev_year_dates = [_prev_year_start + timedelta(days=i) for i in range(_n_year)]
+        year_pct, year_cur, year_prev = _window_pct(_cur_year_dates, _prev_year_dates)
+    except (ValueError, OverflowError):
+        year_pct, year_cur, year_prev = None, _round(year_kwh), None
+
+    deltas = {
+        "week_pct": week_pct,
+        "week_current_kwh": week_cur,
+        "week_prev_kwh": week_prev,
+        "month_pct": month_pct,
+        "month_current_kwh": month_cur,
+        "month_prev_kwh": month_prev,
+        "year_pct": year_pct,
+        "year_current_kwh": year_cur,
+        "year_prev_kwh": year_prev,
+    }
 
     # --- Savings & impact (money saved + CO2 avoided) --------------------
     tariff = config.ELECTRICITY_TARIFF
@@ -1579,6 +1647,7 @@ def get_generation_summary() -> dict:
         "inverter_lifetime": _round(lifetime_kwh),
         "impact": impact,
         "capacity": capacity,
+        "deltas": deltas,
     }
 
 

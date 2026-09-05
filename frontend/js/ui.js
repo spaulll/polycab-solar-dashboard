@@ -162,6 +162,43 @@ function renderGenerationSummary(summary){
     if(monthSub) monthSub.hidden = true;
   }
 
+  // WoW / MoM (/YoY) deltas: arrow + text (never color-only), tooltip with
+  // absolute kWh, hidden when null (insufficient history).
+  renderDelta('genWeekDelta', summary?.deltas?.week_pct, {
+    cur: summary?.deltas?.week_current_kwh,
+    prev: summary?.deltas?.week_prev_kwh,
+    label: 'vs last week',
+  });
+  renderDelta('genMonthDelta', summary?.deltas?.month_pct, {
+    cur: summary?.deltas?.month_current_kwh,
+    prev: summary?.deltas?.month_prev_kwh,
+    label: 'vs last month',
+  });
+  renderDelta('genYearDelta', summary?.deltas?.year_pct, {
+    cur: summary?.deltas?.year_current_kwh,
+    prev: summary?.deltas?.year_prev_kwh,
+    label: 'vs last year',
+  });
+}
+
+function renderDelta(id, pct, ctx = {}){
+  const node = el(id);
+  if(!node) return;
+  if(pct === null || pct === undefined || Number.isNaN(Number(pct))){
+    node.hidden = true;
+    return;
+  }
+  const v = Number(pct);
+  const up = v >= 0;
+  const arrow = up ? '▲' : '▼';
+  const sign = up ? '+' : '';
+  node.hidden = false;
+  node.textContent = `${arrow} ${sign}${v.toFixed(1)}% ${ctx.label || ''}`.trim();
+  node.classList.toggle('up', up);
+  node.classList.toggle('down', !up);
+  const cur = ctx.cur !== null && ctx.cur !== undefined ? `${Number(ctx.cur).toFixed(1)} kWh` : '–';
+  const prev = ctx.prev !== null && ctx.prev !== undefined ? `${Number(ctx.prev).toFixed(1)} kWh` : '–';
+  node.title = `Now ${cur} vs then ${prev} (equal elapsed days). Partial weeks/months compare the same elapsed days.`;
 }
 
 // ---------- Inverter status card ----------
