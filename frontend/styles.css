@@ -258,20 +258,10 @@ body{
 .dot.down{ background: var(--err); }
 .dot.night{ background: var(--night); }
 
-/* Degraded connection (syncing / offline): pulse the whole pill gently so
-   the state reads at a glance without reading any text. */
+/* Degraded connection (syncing / offline): calm error border only — state
+   still reads at a glance from the dot color + label, with no pulsing. */
 .pill.degraded{
   border-color: var(--err);
-  animation: pill-pulse 2s var(--ease-out) infinite;
-}
-
-@keyframes pill-pulse{
-  0%, 100%{ box-shadow: 0 0 0 0 transparent; }
-  50%{ box-shadow: 0 0 0 3px var(--accent-dim); }
-}
-
-@media (prefers-reduced-motion: reduce){
-  .pill.degraded{ animation: none; }
 }
 
 /* ==========================================================================
@@ -2551,12 +2541,6 @@ html{ scroll-behavior: smooth; }
   100%{ transform: scale(1); }
 }
 
-@keyframes dot-ping{
-  0%{ transform: scale(0.6); opacity: 0.8; }
-  70%{ transform: scale(1.9); opacity: 0; }
-  100%{ transform: scale(1.9); opacity: 0; }
-}
-
 @keyframes num-pop{
   0%{ transform: translateY(3px); opacity: 0.4; }
   100%{ transform: none; opacity: 1; }
@@ -2715,22 +2699,12 @@ footer{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay
 /* Theme icons: slower, springier morph. */
 .theme-toggle svg{ transition: opacity 0.45s ease, transform 0.5s var(--ease-spring-soft); }
 
-/* ---------- Status dots: breathing ping ---------- */
+/* ---------- Status dots: calm color states, no motion ---------- */
+/* Dots carry state through color alone (green / red / indigo); the old
+   expanding ping rings are gone so the pills sit still. */
 .dot{ position: relative; transition: background-color var(--dur-med) ease; }
-.dot.live::after,
-.dot.down::after{
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  opacity: 0;
-  pointer-events: none;
-}
 .dot.live{ color: var(--ok); }
-.dot.live::after{ animation: dot-ping 2.6s var(--ease-enter) infinite; }
 .dot.down{ color: var(--err); }
-.dot.down::after{ animation: dot-ping 1.8s var(--ease-enter) infinite; }
 
 /* Inverter status word cross-fades between states. */
 .inv-status-value{ transition: color var(--dur-med) ease, opacity var(--dur-med) ease; }
@@ -2896,8 +2870,6 @@ footer{ animation: rise-in var(--dur-xl) var(--ease-enter) both; animation-delay
   .tabbar,
   .topbar,
   footer{ animation: none !important; opacity: 1 !important; transform: none !important; }
-  .dot.live::after,
-  .dot.down::after,
   .loss-bar-fill::after,
   .night-banner .moon{ animation: none !important; }
   .js-anim .reveal{ opacity: 1; transform: none; }
