@@ -2228,6 +2228,13 @@ footer{
   text-align: center;
 }
 
+/* Weather Impact head keeps its lens toggle on the title row: the tag
+   ellipsizes instead of pushing the toggle down. Scoped above the phone
+   breakpoint so the intentional stacked heads keep working there. */
+@media (min-width: 621px){
+  #weatherPanel .panel-head{ flex-wrap: nowrap; }
+}
+
 /* Tomorrow estimate row in the weather popup: muted, wraps cleanly. */
 .weather-tomorrow{
   margin: 12px 0 0;

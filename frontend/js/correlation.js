@@ -31,7 +31,7 @@ function renderTag(payload){
   if(payload.matched_days < COVERAGE_MIN_DAYS || !clear || !cloudy ||
      clear.avg_kwh === null || cloudy.avg_kwh === null || clear.avg_kwh <= 0){
     tag.hidden = false;
-    tag.textContent = 'collecting comparison data…';
+    tag.textContent = 'collecting data…';
     tag.title =
       `${payload.matched_days} of ${COVERAGE_MIN_DAYS} matched days so far. ` +
       'Daily weather is archived a few days behind real time, so recent ' +
