@@ -1189,6 +1189,80 @@ select:hover{ color: var(--text); }
 .chart-msg.show{ display: grid; }
 
 /* ==========================================================================
+   Year heatmap — GitHub-style daily-yield calendar (pure HTML/CSS grid)
+   Amber scale from the existing palette; blank = no data (never zero).
+   The scroll container scrolls internally on phones; the page never gains
+   horizontal overflow.
+   ========================================================================== */
+
+.heatmap-scroll{
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 16px 20px 8px;
+  box-sizing: border-box;
+}
+
+.heatmap-grid{
+  display: inline-flex;
+  gap: 3px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hm-week{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: none;
+}
+
+.hm-day{
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+/* Blank = no data (not zero). Pads outside the year are invisible. */
+.hm-day.lv0{
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+.hm-day.lv1{ background: color-mix(in srgb, var(--accent) 25%, transparent); border-color: transparent; }
+.hm-day.lv2{ background: color-mix(in srgb, var(--accent) 50%, transparent); border-color: transparent; }
+.hm-day.lv3{ background: color-mix(in srgb, var(--accent) 75%, transparent); border-color: transparent; }
+.hm-day.lv4{ background: var(--accent); border-color: transparent; }
+
+.hm-day.pad{
+  background: transparent;
+  border-color: transparent;
+}
+
+.heatmap-legend{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 20px 16px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.heatmap-legend .hm-day{
+  width: 11px;
+  height: 11px;
+}
+
+@media (max-width: 620px){
+  .heatmap-scroll{ padding: 12px 14px 6px; }
+  .heatmap-legend{ padding: 6px 14px 12px; }
+}
+
+/* ==========================================================================
    Live output gauge + inverter mood — two balanced cards side by side
    ========================================================================== */
 

@@ -29,6 +29,7 @@ import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
 import { initGlance } from './glance.js';
 import { loadDbHealth } from './dbhealth.js';
+import { initHeatmap, renderHeatmap } from './heatmap.js';
 import { initStatsToggle } from './statsToggle.js';
 import { initReveals } from './motion.js';
 import { toast } from './toast.js';
@@ -175,6 +176,8 @@ async function loadDailySummary(){
     // Same aggregated series feeds the cumulative running-total chart; the
     // extra work is one client-side pass over a few hundred points.
     renderCumulative(days);
+    // Year heatmap reuses the same full day series (no extra fetch).
+    renderHeatmap(days);
   }catch(e){
     console.error('Failed to load daily summary', e);
   }
@@ -483,6 +486,8 @@ function refreshLive(){
   // loadHistory()/loadDailySummary()/... below must render the restored
   // views, never the hardcoded defaults.
   restorePersistedRanges();
+  // Year heatmap selector restores before the first day series lands.
+  initHeatmap();
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();
