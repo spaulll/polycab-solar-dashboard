@@ -4,6 +4,7 @@
 //
 //   polycab.dashboard.powerRange       Power Over Time range
 //   polycab.dashboard.cumulativeRange  Cumulative Energy range
+//   polycab.dashboard.dailyMonth       Daily Energy Log month (YYYY-MM)
 //   polycab.dashboard.monthlyRange     Monthly Energy range
 //   polycab.dashboard.temperatureView  Temperature panel lens
 //   polycab.dashboard.weatherView      Weather Impact panel lens

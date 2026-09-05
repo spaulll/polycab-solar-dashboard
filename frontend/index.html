@@ -479,18 +479,26 @@
   <div class="layout">
     <section class="col-main">
 
-      <!-- Daily energy log -->
+      <!-- Daily energy log: one month at a time (per-day bars). The full
+           day series is fetched once; the month select slices it
+           client-side so years of history never crowd one axis. -->
       <div class="panel">
         <div class="panel-head">
-          <h3 class="panel-title">Daily Energy Log</h3>
-          <button class="btn" id="csvBtn">
-            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"/></svg>
-            Export CSV
-          </button>
+          <div class="panel-head-main">
+            <h3 class="panel-title">Daily Energy Log</h3>
+            <p class="panel-subtitle" id="dailyMonthTag" hidden></p>
+          </div>
+          <select id="dailyMonth" aria-label="Month"></select>
         </div>
         <div class="chart-holder small">
           <canvas id="dailyChart"></canvas>
           <div class="chart-msg" id="dailyChartMsg"></div>
+        </div>
+        <div class="panel-foot">
+          <button class="export-link" id="csvBtn" type="button" title="Download daily energy as CSV">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-download"/></svg>
+            Export CSV
+          </button>
         </div>
       </div>
 

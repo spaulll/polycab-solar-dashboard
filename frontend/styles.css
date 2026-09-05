@@ -854,6 +854,69 @@ body.booting :is(.stat-value .unit, .gen-value .unit, .gauge-watts .unit){ visib
 /* Explicit display above would beat [hidden]; restore it. */
 .tag[hidden]{ display: none; }
 
+/* Head controls: a select + button pair that wraps as one unit on narrow
+   screens instead of stranding the button alone on its own row. */
+.head-controls{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Panel footer: quiet right-aligned row for low-emphasis actions such as
+   the daily-log CSV export. Border-top hairline only — no background, no
+   bulk — so the action reads as a footnote, not a second header. */
+.panel-foot{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* Minimal export action: borderless text + icon in faint tone, accent on
+   hover. Deliberately chromeless so the Daily Energy Log head keeps only
+   the month select. */
+.export-link{
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--faint);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 4px 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.export-link svg{
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.export-link:hover{ color: var(--accent); }
+
+.export-link:active{ transform: scale(0.97); }
+
+.export-link:focus-visible{
+  outline: none;
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .export-link:active{ transform: none; }
+}
+
 .panel-body{
   padding: var(--space-4);
 }
@@ -3160,6 +3223,7 @@ footer{
   .glance-bar{ margin: 12px 14px 14px; }
   .panel-head{ padding: 14px 14px; }
   .panel-body{ padding: 14px; }
+  .panel-foot{ padding: 10px 14px; }
 }
 
 @media (max-width: 360px){

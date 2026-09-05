@@ -873,7 +873,16 @@ function appendLivePoint(reading){
   powerChart.update('none'); // no animation -> smooth, no flicker
 }
 
-// ---------- Daily Energy Log (date -> kWh totals; unchanged role) ----------
+// ---------- Daily Energy Log (per-day bars for one selected month) ----------
+// The full day series (/api/daily-summary, ordered ascending) arrives in one
+// fetch; the month select slices it client-side -- the same pattern the
+// Cumulative chart uses with its range toggle. Rendering every stored day at
+// once turned the axis into clutter after the first year, so the chart shows
+// at most ~31 bars: every day of the selected month, newest month by
+// default. The selection survives refetches while its month still has data.
+let dailyDays = [];
+let dailyMonth = null;
+
 const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
   type: 'bar',
   data: {
@@ -890,19 +899,88 @@ const dailyChart = new Chart(el('dailyChart').getContext('2d'), {
     responsive: true,
     maintainAspectRatio: false,
     animation: ambientAnim(),
-    plugins: { legend: { display: false } },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: items => fmtDayLabel(items[0]?.label ?? ''),
+          label: item => ` ${fmt(item.parsed.y, 1)} kWh`,
+        }
+      }
+    },
     scales: {
-      x: { grid: { display:false }, ticks: { maxRotation: 45, minRotation: 0 } },
+      // Labels stay full YYYY-MM-DD (tooltips resolve them); the axis only
+      // prints the day number so 31 bars fit without rotation.
+      x: {
+        grid: { display:false },
+        ticks: {
+          maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 15,
+          callback(v){ const l = this.getLabelForValue(v); return typeof l === 'string' ? l.slice(8) : l; },
+        },
+      },
       y: { beginAtZero: true, grid: { color: themeColors.grid }, title:{display:true,text:'kWh',color:themeColors.axisTitle,font:{size:10}} }
     }
   }
 });
 
-function renderDailySummary(days){
-  holderMsg('dailyChartMsg', days.length ? null : 'No data yet');
-  dailyChart.data.labels = days.map(d => d.day);
-  dailyChart.data.datasets[0].data = days.map(d => d.energy_kwh);
+// Months present in the stored series, ascending ('YYYY-MM').
+function dailyMonthOptions(){
+  const months = new Set(dailyDays.map(d => String(d.day).slice(0, 7)));
+  return [...months].sort();
+}
+
+function syncDailyMonthSelect(months){
+  const select = el('dailyMonth');
+  if(!select) return;
+  const current = select.value;
+  select.textContent = '';
+  for(const m of [...months].reverse()){
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = fmtMonthYear(m);
+    select.appendChild(opt);
+  }
+  if(months.includes(current)) select.value = current;
+  else if(dailyMonth && months.includes(dailyMonth)) select.value = dailyMonth;
+}
+
+function renderDailyMonth(){
+  const months = dailyMonthOptions();
+  syncDailyMonthSelect(months);
+  const tag = el('dailyMonthTag');
+  if(!months.length){
+    dailyMonth = null;
+    holderMsg('dailyChartMsg', 'No data yet');
+    dailyChart.data.labels = [];
+    dailyChart.data.datasets[0].data = [];
+    dailyChart.update();
+    if(tag) tag.hidden = true;
+    return;
+  }
+  if(!dailyMonth || !months.includes(dailyMonth)) dailyMonth = months[months.length - 1];
+  const select = el('dailyMonth');
+  if(select) select.value = dailyMonth;
+  const sliced = dailyDays.filter(d => String(d.day).slice(0, 7) === dailyMonth);
+  holderMsg('dailyChartMsg', sliced.length ? null : 'No data yet');
+  dailyChart.data.labels = sliced.map(d => d.day);
+  dailyChart.data.datasets[0].data = sliced.map(d => d.energy_kwh);
   dailyChart.update();
+  if(tag){
+    const total = sliced.reduce((sum, d) => sum + (Number(d.energy_kwh) || 0), 0);
+    tag.hidden = false;
+    tag.textContent = `${fmtMonthLong(dailyMonth)} · ${fmt(total, 1)} kWh`;
+  }
+}
+
+function renderDailySummary(days){
+  if(days) dailyDays = days;
+  renderDailyMonth();
+}
+
+function setDailyMonth(month){
+  if(!dailyMonthOptions().includes(month)) return;
+  dailyMonth = month;
+  renderDailyMonth();
 }
 
 // ---------- Cumulative Energy (running total of daily kWh) ----------
@@ -1727,7 +1805,8 @@ function applyChartTheme(themeName){
 
 export {
   renderHistory, renderSessions, renderProfile, appendLivePoint,
-  renderDailySummary, renderCumulative, setCumulativeRange,
+  renderDailySummary, setDailyMonth, dailyMonthOptions,
+  renderCumulative, setCumulativeRange,
   renderMonthly, setMonthlyRange, applyChartTheme,
   loadTodayProjection, updatePaceTag,
   renderTemperature, setTemperatureView,

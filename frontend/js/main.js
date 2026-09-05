@@ -12,7 +12,7 @@ import {
   updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
   renderGenerationSummary,
 } from './ui.js';
-import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, loadTodayProjection, updatePaceTag } from './charts.js';
+import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, setDailyMonth, dailyMonthOptions, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, loadTodayProjection, updatePaceTag } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
 import { loadTemperature, updateCurrentTemp, initTemperature } from './temperature.js';
@@ -372,6 +372,17 @@ function restorePersistedRanges(){
   pcSelect.value = pcRange;
 }
 
+// The Daily Energy Log's month options only exist after the first
+// /api/daily-summary lands, so its saved selection restores separately from
+// restorePersistedRanges() (which runs before any data loads). Stale entries
+// fall back to the newest month; later refetches keep the selection while
+// its month still has data.
+function restoreDailyMonth(){
+  const months = dailyMonthOptions();
+  if(!months.length) return;
+  setDailyMonth(loadPref('dailyMonth', months, months[months.length - 1]));
+}
+
 // ---------- UI events ----------
 // Live chart and Insights panel share the same power range (state.range +
 // the 'powerRange' pref); whichever toggle is clicked, both stay in sync.
@@ -418,6 +429,11 @@ document.getElementById('pcRange').addEventListener('change', (e) => {
   pcRange = e.target.value;
   savePref('powercutsRange', pcRange);
   loadPowercutCount();
+});
+
+document.getElementById('dailyMonth').addEventListener('change', (e) => {
+  setDailyMonth(e.target.value);
+  savePref('dailyMonth', e.target.value);
 });
 
 document.getElementById('csvBtn').addEventListener('click', () => {
@@ -467,6 +483,10 @@ function refreshLive(){
   await loadInitialStatus();
   await loadHistory();
   await loadDailySummary();
+  // Daily month options come from the fetched day series, so the saved
+  // month restores here -- right after the first daily summary -- rather
+  // than in restorePersistedRanges().
+  restoreDailyMonth();
   await loadGenerationSummary();
   await loadImpact();
   await loadMonthlyEnergy();
