@@ -1283,10 +1283,6 @@ select:hover{ color: var(--text); }
   max-width: 100%;
 }
 
-.sys-card .db-health{
-  margin: 0;
-}
-
 @media (max-width: 1020px){
   .heatmap-row{ grid-template-columns: minmax(0, 1fr); }
 }
@@ -2027,21 +2023,6 @@ footer{
   color: var(--faint);
   text-align: center;
 }
-
-/* DB health line in the Trends view: one muted footer line below the
-   Monthly/Weather panels (not a card). Reuses subtitle tokens only. */
-.db-health{
-  margin: 16px 2px 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--faint);
-  text-align: center;
-  white-space: normal;
-  overflow-wrap: break-word;
-}
-
-.db-health[hidden]{ display: none; }
 
 /* ==========================================================================
    Weather chip (top bar) + popup card
