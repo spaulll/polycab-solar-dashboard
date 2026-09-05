@@ -72,6 +72,10 @@ function fetchGenerationStats(fromDay, toDay){
   return getJSON(path);
 }
 
+function fetchDbStatus(){
+  return getJSON('/api/db-status');
+}
+
 function fetchStatus(){
   return getJSON('/api/status');
 }
@@ -121,6 +125,7 @@ export {
   fetchGenerationMonthly,
   fetchGenerationStats,
   fetchWeatherCorrelation,
+  fetchDbStatus,
   fetchStatus,
   fetchSunInfo,
   fetchPowercutCount,

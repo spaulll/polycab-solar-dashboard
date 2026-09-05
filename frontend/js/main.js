@@ -28,6 +28,7 @@ import { initGauge, updateGauge, dimGauge } from './gauge.js';
 import { initErrors, noteError, noteRecovery } from './errors.js';
 import { initSegmented } from './segmented.js';
 import { initGlance } from './glance.js';
+import { loadDbHealth } from './dbhealth.js';
 import { initStatsToggle } from './statsToggle.js';
 import { initReveals } from './motion.js';
 import { toast } from './toast.js';
@@ -84,6 +85,7 @@ function startDayPolling(){
   dayTimers.push(setInterval(loadMonthlyEnergy, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadTemperature, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadWeatherImpact, DAILY_SUMMARY_REFRESH_MS));
+  dayTimers.push(setInterval(loadDbHealth, DAILY_SUMMARY_REFRESH_MS));
   dayTimers.push(setInterval(loadPowercutCount, POWERCUTS_REFRESH_MS));
 }
 
@@ -308,6 +310,7 @@ function handleWSMessage(msg){
     loadMonthlyEnergy();
     loadTemperature();
     loadWeatherImpact();
+    loadDbHealth();
     loadPowercutCount();
     startDayPolling();
   }
@@ -499,6 +502,7 @@ function refreshLive(){
   // Weather Impact panel: same pattern -- saved lens first, then fetch.
   initWeatherImpact();
   await loadWeatherImpact();
+  await loadDbHealth();
   await loadPowercutCount();
   // Error history counter (server-side bounded log; WS errors fold in live).
   initErrors();
