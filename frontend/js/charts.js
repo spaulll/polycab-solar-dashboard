@@ -17,10 +17,10 @@
 // a data gap. Genuine communication gaps inside a session still break the
 // line (GAP_THRESHOLD_MS).
 
-import { GAP_THRESHOLD_MS, MAX_POINTS, TODAY_MAX_POINTS } from './config.js';
+import { GAP_THRESHOLD_MS, MAX_POINTS, TODAY_MAX_POINTS, WEATHER_REFRESH_MS } from './config.js';
 import { state } from './state.js';
 import { fmt } from './format.js';
-import { fetchTodayProjection } from './api.js';
+import { fetchTodayProjection, fetchTomorrowForecast } from './api.js';
 import { getDayWindow } from './sun.js';
 import { prefersReducedMotion } from './motion.js';
 
@@ -476,6 +476,14 @@ const PACE_WARMUP_SECONDS = 30 * 60; // state (don't pace) right after sunrise
 let todayProjection = null;   // last /api/today/projection payload
 let projReqId = 0;            // guards against stale responses on fast toggles
 
+// Tomorrow estimate for the night pace line (same payload as the weather
+// popup + glance sub-line). Lazily refreshed at night; the backend caches
+// for 1h so refetching per night is cheap.
+let tomorrowForPace = null;
+let tomorrowForPaceAt = 0;
+let tomorrowPaceFetching = false;
+const TOMORROW_PACE_TTL_MS = WEATHER_REFRESH_MS;
+
 function projectionUsable(){
   return !!todayProjection
     && todayProjection.day_count >= 3
@@ -553,8 +561,10 @@ const WS_TO_KWH = 1 / 3600000;
 
 // Pace line in the glance card: always visible. Daytime paces today's yield
 // against the long-term typical day ("ON PACE FOR X KWH · TYPICAL Y KWH");
-// at night it reports the finished day instead
-// ("NIGHT · TODAY X · TYPICAL Y KWH"); with no usable history it still
+// at night the slot carries tomorrow's expectation instead
+// ("TOMORROW ≈ X KWH (TYPICAL Y, CLOUDY Z%)", falling back to the finished
+// day only while the forecast is still loading or unavailable); with no
+// usable history it still
 // states today's known total. The slim pace bar
 // under the line fills today/typical. Recomputed on every live reading
 // (`eTodayKwh`), falling back to the payload's own current_kwh otherwise.
@@ -584,8 +594,32 @@ function updatePaceTag(eTodayKwh){
   }
   const typ = fmt(typical, 1);
 
-  // Night: the inverter is asleep — report the finished day, not a pace.
+  // Night: the pace slot carries tomorrow's expectation instead of the
+  // finished day (the glance sub-line hides at night so it never doubles).
   if(state.nightMode){
+    const t = tomorrowForPace;
+    const tok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
+      && t.typical_kwh !== null && t.typical_kwh !== undefined
+      && (t.day_count ?? 0) >= 3;
+    if(tok){
+      const exp = fmt(Number(t.expected_kwh), 1);
+      const ttyp = fmt(Number(t.typical_kwh), 1);
+      const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
+        ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
+      return show(`Tomorrow ≈ ${exp} kWh (typical ${ttyp}${cloud})`,
+        `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`,
+        typical && kwh !== null ? kwh / typical : 0);
+    }
+    if(!tomorrowPaceFetching && Date.now() - tomorrowForPaceAt > TOMORROW_PACE_TTL_MS){
+      tomorrowPaceFetching = true;
+      fetchTomorrowForecast().then(p => {
+        tomorrowForPace = p;
+        tomorrowForPaceAt = Date.now();
+      }).catch(() => {}).finally(() => {
+        tomorrowPaceFetching = false;
+        if(state.nightMode) updatePaceTag();
+      });
+    }
     if(kwh === null) return show(`Night · typical ${typ} kWh`, 'Inverter asleep. Typical yield for an average day.', 0);
     return show(`Night · today ${fmt(kwh, 1)} · typical ${typ} kWh`,
       'How today finished against your long-term average day. Resumes at sunrise.',

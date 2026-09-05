@@ -44,14 +44,35 @@ async function refreshCapacity(){
 }
 
 // Tomorrow estimate: muted sub-line under the pace tag with the same value
-// as the weather popup. Hidden when <3 days, provider fail or empty
-// forecast (honest degrade). Same wi-* icons, no new deps (text only here;
-// the popup already uses the sprite).
+// as the weather popup. Daytime only — at night the pace slot itself carries
+// the forecast, so this line hides to never double it. Also hidden when <3
+// days, provider fail or empty forecast (honest degrade).
 let lastTomorrowFetch = 0;
+let lastTomorrow = null;
+
+function isNight(){
+  const mode = text('modeText').toLowerCase();
+  return mode.includes('night');
+}
+
+function applyTomorrowVisibility(){
+  const node = $('tomorrowTag');
+  if(!node) return;
+  const t = lastTomorrow;
+  const ok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
+    && t.typical_kwh !== null && t.typical_kwh !== undefined
+    && (t.day_count ?? 0) >= 3;
+  if(!ok || isNight()){
+    node.hidden = true;
+    return;
+  }
+  node.hidden = false;
+}
 
 function renderTomorrowGlance(t){
   const node = $('tomorrowTag');
   if(!node) return;
+  lastTomorrow = t;
   const ok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
     && t.typical_kwh !== null && t.typical_kwh !== undefined
     && (t.day_count ?? 0) >= 3;
@@ -63,9 +84,9 @@ function renderTomorrowGlance(t){
   const typ = Number(t.typical_kwh).toFixed(1);
   const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
     ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
-  node.hidden = false;
   node.textContent = `Tomorrow ≈ ${exp} kWh (typical ${typ}${cloud})`;
   node.title = `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`;
+  applyTomorrowVisibility();
 }
 
 async function refreshTomorrow(){
@@ -182,6 +203,9 @@ function syncState(){
   const tdot = $('statsToggleDot');
   if(tdot) tdot.className = cls;
   if(sub) sub.textContent = mode.includes('night') ? 'inverter asleep · resumes at sunrise' : 'live summary';
+  // Mode flips move the forecast between the pace slot (night) and this
+  // sub-line (day); re-apply so the two never show it twice.
+  applyTomorrowVisibility();
 }
 
 export function initGlance(){
