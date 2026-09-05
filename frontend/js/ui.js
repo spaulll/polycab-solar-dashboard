@@ -83,7 +83,13 @@ function dimStatCards(dim){
 }
 
 function setLastUpdated(iso){
-  lastUpdated.textContent = fmtTime(iso);
+  // Compact pill content (clock glyph lives in the markup): full HH:MM:SS
+  // once a reading exists, "no data" before that. The same timestamp sits
+  // in the title tooltip. Writes only the inner span so the SVG survives.
+  const label = el('lastUpdatedText');
+  const stamp = iso ? fmtTime(iso).replace(/^updated\s*/, '') : 'no data';
+  if(label) label.textContent = stamp;
+  if(lastUpdated) lastUpdated.title = iso ? 'Last reading ' + stamp : 'Waiting for first reading';
 }
 
 // ---------- Generation KPI strip ----------

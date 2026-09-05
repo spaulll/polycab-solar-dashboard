@@ -212,12 +212,24 @@ body{
   gap: 10px;
 }
 
+/* Status cluster (connection + mode pills glued to the weather/theme
+   actions). Transparent on desktop so the header reads exactly as before;
+   on phones it becomes the full-width second row under brand + timestamp. */
+.topbar-status{
+  display: contents;
+}
+
+/* Last-reading timestamp: a quiet pill matching its status siblings — clock
+   glyph + compact HH:MM. The full time lives in the title tooltip. */
 .updated{
-  font-family: var(--mono);
-  font-size: var(--font-size-1);
-  color: var(--faint);
-  margin-right: var(--space-1);
   white-space: nowrap;
+}
+
+.updated svg{
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--faint);
 }
 
 .pill{
@@ -3411,11 +3423,20 @@ footer{
   .rail-value{ font-size: 13px; }
   .sun-countdown-value{ font-size: 24px; }
 
-  /* --- Topbar: tighter row, smaller controls --- */
+  /* --- Topbar: brand + timestamp on row one, status always row two --- */
   .topbar{ gap: 8px; }
-  /* Flatten the right cluster so brand, timestamp, pills and actions wrap
-     as individual units: brand shares row one, status + actions row two. */
+  /* Flatten the right cluster so the topbar's flex items are brand,
+     timestamp, and the status cluster. The status cluster takes the full
+     second row, so pills / weather / theme can never strand beside the
+     brand or timestamp on row one. */
   .topbar-right{ display: contents; }
+  .topbar-status{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+  }
   .topbar-actions{ gap: 8px; }
   .updated{ font-size: 11px; }
   .pill{ padding: 4px 9px; }
