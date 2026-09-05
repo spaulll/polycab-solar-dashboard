@@ -1203,7 +1203,12 @@ select:hover{ color: var(--text); }
 }
 
 .heatmap-grid{
-  display: inline-flex;
+  display: flex;
+  /* Shrink-wrap the 53-week grid and center it in wide cards; on narrow
+     screens the fixed-size weeks overflow instead (margin auto collapses
+     to 0) so the internal scroll stays reachable from the left edge. */
+  width: fit-content;
+  margin: 0 auto;
   gap: 3px;
   min-width: 0;
   box-sizing: border-box;
