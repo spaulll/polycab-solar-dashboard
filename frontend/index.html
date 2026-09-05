@@ -5,15 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Solar Dashboard</title>
 <script>
-  // Apply the theme before the stylesheet loads so there is no dark flash.
-  // Stored choice wins; otherwise follow the system preference.
+  // Apply the theme before the stylesheet loads so there is no flash.
+  // Preference ('light' | 'dark' | 'auto') wins; missing/invalid means
+  // 'auto' (follow the OS). data-theme-mode keeps the preference for the
+  // toggle icon, data-theme keeps the resolved light/dark for styling.
   (function(){
-    var t = null;
-    try { t = localStorage.getItem('theme'); } catch(e){}
-    if(t !== 'light' && t !== 'dark'){
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    var pref = null;
+    try { pref = localStorage.getItem('theme'); } catch(e){}
+    if(pref !== 'light' && pref !== 'dark' && pref !== 'auto'){
+      pref = 'auto';
     }
-    document.documentElement.setAttribute('data-theme', t);
+    var resolved = pref;
+    if(pref === 'auto'){
+      resolved = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme-mode', pref);
+    document.documentElement.setAttribute('data-theme', resolved);
   })();
 </script>
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
@@ -63,6 +70,20 @@
     <symbol id="i-theme-moon" viewBox="0 0 24 24">
       <path d="M18.6 15.1A8.2 8.2 0 0 1 8.9 5.4a8.2 8.2 0 1 0 9.7 9.7z"
             fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-theme-auto" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M12 4.8a7.2 7.2 0 0 1 0 14.4z" fill="currentColor"/>
+      <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="12" y1="1.6" x2="12" y2="3.2"/>
+        <line x1="12" y1="20.8" x2="12" y2="22.4"/>
+        <line x1="1.6" y1="12" x2="3.2" y2="12"/>
+        <line x1="20.8" y1="12" x2="22.4" y2="12"/>
+        <line x1="4.7" y1="4.7" x2="5.8" y2="5.8"/>
+        <line x1="18.2" y1="18.2" x2="19.3" y2="19.3"/>
+        <line x1="4.7" y1="19.3" x2="5.8" y2="18.2"/>
+        <line x1="18.2" y1="5.8" x2="19.3" y2="4.7"/>
+      </g>
     </symbol>
     <symbol id="i-moon" viewBox="0 0 24 24">
       <path d="M18.6 15.1A8.2 8.2 0 0 1 8.9 5.4a8.2 8.2 0 1 0 9.7 9.7z"
@@ -191,9 +212,10 @@
           <span class="weather-temp" id="weatherTemp">–°</span>
         </button>
         <button class="theme-toggle" id="themeToggle" type="button"
-                aria-label="Switch to light mode" title="Toggle theme">
+                aria-label="Theme: auto (click for light mode)" title="Theme: auto — click for light">
           <svg class="theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-theme-sun"/></svg>
           <svg class="theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-theme-moon"/></svg>
+          <svg class="theme-icon-auto" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-theme-auto"/></svg>
         </button>
       </div>
     </div>

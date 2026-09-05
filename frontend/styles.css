@@ -2214,16 +2214,22 @@ footer{
   transition: opacity var(--dur-med) ease, transform var(--dur-med) ease;
 }
 
-/* Dark mode shows the moon; light mode shows the sun. The outgoing icon
-   rotates and shrinks while fading for a compact morph feel. */
-[data-theme="dark"] .theme-icon-sun,
-[data-theme="light"] .theme-icon-moon{
+/* Preference drives the icon: manual light shows the sun, manual dark
+   shows the moon, auto shows the half-shaded auto glyph. The outgoing
+   icons rotate and shrink while fading for a compact morph feel. */
+[data-theme-mode="light"] .theme-icon-moon,
+[data-theme-mode="light"] .theme-icon-auto,
+[data-theme-mode="dark"] .theme-icon-sun,
+[data-theme-mode="dark"] .theme-icon-auto,
+[data-theme-mode="auto"] .theme-icon-sun,
+[data-theme-mode="auto"] .theme-icon-moon{
   opacity: 0;
   transform: rotate(-90deg) scale(0.4);
 }
 
-[data-theme="dark"] .theme-icon-moon,
-[data-theme="light"] .theme-icon-sun{
+[data-theme-mode="light"] .theme-icon-sun,
+[data-theme-mode="dark"] .theme-icon-moon,
+[data-theme-mode="auto"] .theme-icon-auto{
   opacity: 1;
   transform: rotate(0deg) scale(1);
 }
