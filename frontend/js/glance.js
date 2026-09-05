@@ -4,8 +4,7 @@
 // "best today" must not move when the user browses 7D/All. All lookups are
 // guarded -- missing sources keep their placeholder.
 
-import { fetchPeakProduction, fetchGenerationSummary, fetchTomorrowForecast } from './api.js';
-import { WEATHER_REFRESH_MS } from './config.js';
+import { fetchPeakProduction, fetchGenerationSummary } from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -41,61 +40,6 @@ async function refreshCapacity(){
   }catch(e){ /* keep last known; hidden when unset */ }
   lastCapacityFetch = Date.now();
   syncNumbers();
-}
-
-// Tomorrow estimate: muted sub-line under the pace tag with the same value
-// as the weather popup. Daytime only — at night the pace slot itself carries
-// the forecast, so this line hides to never double it. Also hidden when <3
-// days, provider fail or empty forecast (honest degrade).
-let lastTomorrowFetch = 0;
-let lastTomorrow = null;
-
-function isNight(){
-  const mode = text('modeText').toLowerCase();
-  return mode.includes('night');
-}
-
-function applyTomorrowVisibility(){
-  const node = $('tomorrowTag');
-  if(!node) return;
-  const t = lastTomorrow;
-  const ok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
-    && t.typical_kwh !== null && t.typical_kwh !== undefined
-    && (t.day_count ?? 0) >= 3;
-  if(!ok || isNight()){
-    node.hidden = true;
-    return;
-  }
-  node.hidden = false;
-}
-
-function renderTomorrowGlance(t){
-  const node = $('tomorrowTag');
-  if(!node) return;
-  lastTomorrow = t;
-  const ok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
-    && t.typical_kwh !== null && t.typical_kwh !== undefined
-    && (t.day_count ?? 0) >= 3;
-  if(!ok){
-    node.hidden = true;
-    return;
-  }
-  const exp = Number(t.expected_kwh).toFixed(1);
-  const typ = Number(t.typical_kwh).toFixed(1);
-  const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
-    ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
-  node.textContent = `Tomorrow ≈ ${exp} kWh (typical ${typ}${cloud})`;
-  node.title = `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`;
-  applyTomorrowVisibility();
-}
-
-async function refreshTomorrow(){
-  try{
-    renderTomorrowGlance(await fetchTomorrowForecast());
-  }catch(e){
-    renderTomorrowGlance(null);
-  }
-  lastTomorrowFetch = Date.now();
 }
 
 function text(id){
@@ -203,9 +147,6 @@ function syncState(){
   const tdot = $('statsToggleDot');
   if(tdot) tdot.className = cls;
   if(sub) sub.textContent = mode.includes('night') ? 'inverter asleep · resumes at sunrise' : 'live summary';
-  // Mode flips move the forecast between the pace slot (night) and this
-  // sub-line (day); re-apply so the two never show it twice.
-  applyTomorrowVisibility();
 }
 
 export function initGlance(){
@@ -219,16 +160,13 @@ export function initGlance(){
     if(el) obs.observe(el, { childList: true, characterData: true, subtree: true });
   }
   // Fallback tick in case a renderer replaces nodes wholesale; the today
-  // peak + capacity refresh on a slow tick alongside it. Tomorrow follows
-  // the weather cadence (backend caches 1h).
+  // peak + capacity refresh on a slow tick alongside it.
   setInterval(() => {
     syncNumbers();
     syncState();
     if(Date.now() - lastPeakFetch > PEAK_REFRESH_MS) refreshTodayPeak();
     if(Date.now() - lastCapacityFetch > PEAK_REFRESH_MS) refreshCapacity();
-    if(Date.now() - lastTomorrowFetch > WEATHER_REFRESH_MS) refreshTomorrow();
   }, 5000);
   refreshTodayPeak();
   refreshCapacity();
-  refreshTomorrow();
 }

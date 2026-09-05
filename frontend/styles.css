@@ -3398,22 +3398,8 @@ footer{
 .glance-pace{ padding: 2px 20px 0; }
 .glance-bar{ margin-top: 10px; }
 
-/* Tomorrow estimate sub-line under the pace tag: muted, wraps cleanly so
-   the full `Tomorrow ≈ X (typical Y, cloudy Z%)` never overflows narrow
-   phones. */
-.glance-tomorrow{
-  padding: 2px 20px 0;
-  color: var(--faint);
-  white-space: normal;
-  overflow-wrap: break-word;
-  line-height: 1.4;
-}
-
-.glance-tomorrow[hidden]{ display: none; }
-
 @media (max-width: 620px){
   .glance-pace{ padding-left: 14px; padding-right: 14px; }
-  .glance-tomorrow{ padding-left: 14px; padding-right: 14px; }
 }
 
 /* ==========================================================================

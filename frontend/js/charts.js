@@ -595,7 +595,7 @@ function updatePaceTag(eTodayKwh){
   const typ = fmt(typical, 1);
 
   // Night: the pace slot carries tomorrow's expectation instead of the
-  // finished day (the glance sub-line hides at night so it never doubles).
+  // finished day (also shown in the weather popup on demand).
   if(state.nightMode){
     const t = tomorrowForPace;
     const tok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
