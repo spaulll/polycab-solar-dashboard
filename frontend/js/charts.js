@@ -552,9 +552,10 @@ function cumulativeTypicalWs(limitSec){
 const WS_TO_KWH = 1 / 3600000;
 
 // Pace line in the glance card: always visible. Daytime paces today's yield
-// against the long-term typical day ("PACE X · TYP Y KWH"); at night it
-// reports the finished day instead ("NIGHT · TODAY X · TYP Y KWH"); with no
-// usable history it still states today's known total. The slim pace bar
+// against the long-term typical day ("ON PACE FOR X KWH · TYPICAL Y KWH");
+// at night it reports the finished day instead
+// ("NIGHT · TODAY X · TYPICAL Y KWH"); with no usable history it still
+// states today's known total. The slim pace bar
 // under the line fills today/typical. Recomputed on every live reading
 // (`eTodayKwh`), falling back to the payload's own current_kwh otherwise.
 function updatePaceTag(eTodayKwh){
@@ -578,15 +579,15 @@ function updatePaceTag(eTodayKwh){
 
   // No history yet: state today's known total (or wait honestly).
   if(typical === null){
-    if(kwh === null) return show('Today – · typ – kWh', 'Collecting history — averages appear after a few days.', 0);
+    if(kwh === null) return show('Today – · typical – kWh', 'Collecting history — averages appear after a few days.', 0);
     return show(`Today ${fmt(kwh, 1)} kWh`, 'Today’s yield so far. The typical-day comparison appears after a few days of history.', 0);
   }
   const typ = fmt(typical, 1);
 
   // Night: the inverter is asleep — report the finished day, not a pace.
   if(state.nightMode){
-    if(kwh === null) return show(`Night · typ ${typ} kWh`, 'Inverter asleep. Typical yield for an average day.', 0);
-    return show(`Night · today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+    if(kwh === null) return show(`Night · typical ${typ} kWh`, 'Inverter asleep. Typical yield for an average day.', 0);
+    return show(`Night · today ${fmt(kwh, 1)} · typical ${typ} kWh`,
       'How today finished against your long-term average day. Resumes at sunrise.',
       typical ? kwh / typical : 0);
   }
@@ -597,7 +598,7 @@ function updatePaceTag(eTodayKwh){
   const win = (todayWindow?.sunrise && todayWindow?.sunset)
     ? todayWindow : getDayWindow();
   if(!win.sunrise || !win.sunset || kwh === null){
-    return show(`Today ${kwh === null ? '–' : fmt(kwh, 1)} · typ ${typ} kWh`,
+    return show(`Today ${kwh === null ? '–' : fmt(kwh, 1)} · typical ${typ} kWh`,
       'Today’s yield against your long-term average day.',
       typical && kwh !== null ? kwh / typical : 0);
   }
@@ -605,7 +606,7 @@ function updatePaceTag(eTodayKwh){
   const sunriseMs = new Date(win.sunrise).getTime();
   const sunsetMs = new Date(win.sunset).getTime();
   if(!isFinite(sunriseMs) || !isFinite(sunsetMs)){
-    return show(`Today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+    return show(`Today ${fmt(kwh, 1)} · typical ${typ} kWh`,
       'Today’s yield against your long-term average day.', typical ? kwh / typical : 0);
   }
 
@@ -614,20 +615,20 @@ function updatePaceTag(eTodayKwh){
 
   if(offSec >= spanSec){
     // Sunset passed: freeze at the actual final vs the typical day.
-    return show(`Final ${fmt(kwh, 1)} · typ ${typ} kWh`,
+    return show(`Final ${fmt(kwh, 1)} · typical ${typ} kWh`,
       'How today actually finished against your long-term average day.',
       typical ? kwh / typical : 0);
   }
   // First ~30 minutes: too little evidence to pace against — state today.
   if(offSec < PACE_WARMUP_SECONDS){
-    return show(`Today ${fmt(kwh, 1)} · typ ${typ} kWh`,
+    return show(`Today ${fmt(kwh, 1)} · typical ${typ} kWh`,
       'Early in the solar day — pacing starts after the first ~30 minutes.',
       typical ? kwh / typical : 0);
   }
 
   const remainingKwh =
     (cumulativeTypicalWs(Infinity) - cumulativeTypicalWs(offSec)) * WS_TO_KWH;
-  return show(`Pace ${fmt(kwh + remainingKwh, 1)} · typ ${typ} kWh`,
+  return show(`On pace for ${fmt(kwh + remainingKwh, 1)} kWh · typical ${typ} kWh`,
     'Projected final yield if the rest of the day follows your long-term ' +
     'average day. Compared to your long-term average day — a power cut ' +
     'earlier today legitimately lowers it.',
