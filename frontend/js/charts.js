@@ -1739,8 +1739,8 @@ function setWeatherView(view){
 
 // ---------- Theme switching ----------
 // Re-points every hardcoded canvas color and refreshes the live chart
-// instances without animation so grids/axes/tooltips/legends follow the
-// dashboard theme immediately.
+// instances so grids/axes/ticks/tooltips/legends follow the dashboard
+// theme immediately.
 function applyChartTheme(themeName){
   const c = CHART_THEMES[themeName] ?? CHART_THEMES.dark;
   themeColors = c;
@@ -1798,9 +1798,18 @@ function applyChartTheme(themeName){
     for(const scale of Object.values(chart.options.scales)){
       if(scale.grid) scale.grid.color = c.grid;
       if(scale.title?.color) scale.title.color = c.axisTitle;
+      // Tick labels resolve Chart.defaults.color once at creation, so a
+      // later setChartDefaults() never reaches live instances — re-point
+      // them here like grid/title (display:false scales are unaffected).
+      if(scale.ticks) scale.ticks.color = c.text;
       if(scale.border) scale.border.display = false;
     }
-    chart.update('none');
+    // Plain update(), not update('none'): Chart.js only commits element
+    // recolors through its animation loop, so 'none' repaints geometry but
+    // leaves stale bar/line colors on screen until the next hover. The
+    // ambient 450ms morph reads as an intentional theme transition (and
+    // stays instant for reduced-motion users, whose creation duration is 0).
+    chart.update();
   }
 }
 
