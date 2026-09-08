@@ -11,6 +11,7 @@ import { fmtClock, fmtDuration } from './format.js';
 import { fetchSunInfo } from './api.js';
 import { svgEl } from './svg.js';
 import { prefersReducedMotion, swapText } from './motion.js';
+import { setSunriseHint } from './gauge.js';
 
 const el = id => document.getElementById(id);
 
@@ -256,9 +257,54 @@ function updateSunInfo(sun){
 
   swapText(el('sunNextSunrise'), fmtClock(sun.next_sunrise));
   swapText(el('sunNextSunset'), fmtClock(sun.next_sunset));
+  // The two endpoint times are the *next* events, which after sunset belong
+  // to tomorrow: carry the full date in the tooltip so "6:23 AM" can't read
+  // as this morning.
+  setTimeTitle('sunNextSunrise', sun.next_sunrise, 'Next sunrise');
+  setTimeTitle('sunNextSunset', sun.next_sunset, 'Next sunset');
   swapText(el('sunCountdownLabel'), sunIsNight ? 'Time to sunrise' : 'Time to sunset');
 
   tickSunCountdown(); // render immediately instead of waiting for next tick
+}
+
+function setTimeTitle(id, iso, label){
+  const node = el(id);
+  if(!node || !iso) return;
+  const d = new Date(iso);
+  if(Number.isNaN(d.getTime())) return;
+  node.title = `${label} · ` + d.toLocaleString([], {
+    weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+// Next-event getters for copy that names the wait ("resumes 6:23 AM").
+// Dates or null; same server source of truth as the countdown.
+function getNextSunrise(){
+  return sunTargetSunrise;
+}
+
+function getNextSunset(){
+  return sunTargetSunset;
+}
+
+// The night banner owns the only frozen-text risk on the page: the WS
+// night_mode message fires once per night, so a precomputed "resumes in
+// ~Xh" would go stale within the hour. Recompute it here from the same
+// target the countdown uses — clock time only (the live HH:MM:SS countdown
+// already ticks in the sun card, so the banner stays a stable one-liner
+// that can't overflow on 375px phones or churn layout every second).
+function tickNightBanner(){
+  const node = el('nightText');
+  if(!node || !sunIsNight) return;
+  if(!sunTargetSunrise){
+    if(node.textContent !== 'Inverter is asleep. Waiting for sunrise…')
+      node.textContent = 'Inverter is asleep. Waiting for sunrise…';
+    return;
+  }
+  const clock = fmtClock(sunTargetSunrise.toISOString());
+  const next = `Inverter asleep · resumes ${clock}`;
+  if(node.textContent !== next) node.textContent = next;
 }
 
 function tickSunCountdown(){
@@ -270,6 +316,12 @@ function tickSunCountdown(){
   const now = new Date();
   const secondsLeft = (target - now) / 1000;
   el('sunCountdown').textContent = fmtDuration(secondsLeft);
+  tickNightBanner();
+  // Keep the gauge + glance overnight copy naming the same sunrise clock.
+  try{
+    setSunriseHint(sunTargetSunrise && sunIsNight
+      ? fmtClock(sunTargetSunrise.toISOString()) : '');
+  }catch(e){}
 
   // Marker progress. Day: sunrise->sunset maps to angle PI->0 (clockwise).
   // Night: sunset->sunrise maps to angle 0->PI (anti-clockwise, same arc).
@@ -321,4 +373,4 @@ function startSunTicker(){
   setInterval(tickSunCountdown, SUN_COUNTDOWN_TICK_MS);
 }
 
-export { updateSunInfo, refreshSunInfo, startSunTicker, tickSunCountdown, getDayWindow };
+export { updateSunInfo, refreshSunInfo, startSunTicker, tickSunCountdown, getDayWindow, getNextSunrise, getNextSunset };

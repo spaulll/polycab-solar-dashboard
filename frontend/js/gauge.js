@@ -60,6 +60,7 @@ let moodSubEl = null;
 let lastWatts = null;      // last live value applied (number | null)
 let lastNight = false;
 let debugWatts = null;     // explicit pin for screenshots; null = follow live
+let sunriseHint = '';      // "6:23 AM" when the sun module knows next sunrise
 
 // ---------- scale math ----------
 
@@ -173,7 +174,7 @@ function renderReadout(watts){
     // Night names the wait instead of going blank; the line's height is
     // always reserved (no-break space) so the card never reflows.
     if(lastNight && debugWatts === null){
-      rateEl.textContent = 'until sunrise';
+      rateEl.textContent = sunriseHint ? `until ${sunriseHint}` : 'until sunrise';
       rateEl.classList.toggle('active', false);
     } else {
       const text = (watts !== null) ? fmtRate(watts) : '';
@@ -192,7 +193,7 @@ function renderMood(watts){
   if(lastNight && debugWatts === null){
     level = 0;
     word = 'Sleeping';
-    sub = 'inverter asleep';
+    sub = sunriseHint ? `asleep · resumes ${sunriseHint}` : 'inverter asleep';
   } else {
     ({ level, word } = moodFor(watts, max));
     if(watts !== null && watts > 0){
@@ -293,6 +294,15 @@ export function dimGauge(night){
   } else {
     applyWatts(null);
   }
+}
+
+// Next-sunrise hint for the overnight copy ("until 6:23 AM" instead of a
+// bare "until sunrise"). Fed by the sun module's 1s ticker; empty clears it.
+export function setSunriseHint(clockStr){
+  const next = clockStr || '';
+  if(next === sunriseHint) return;
+  sunriseHint = next;
+  if(lastNight) applyWatts(debugWatts !== null ? debugWatts : null);
 }
 
 // Screenshot/debug override: pin the dial + mood to an explicit wattage;

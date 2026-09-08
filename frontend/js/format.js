@@ -7,8 +7,33 @@ function fmt(n, digits = 1){
 
 function fmtTime(iso){
   if(!iso) return 'no data yet';
+  return 'updated ' + fmtTimeShort(iso);
+}
+
+// Compact wall-clock for a reading timestamp, date-aware so overnight
+// values can't masquerade as today's: same local day -> HH:MM:SS,
+// yesterday -> "yesterday HH:MM", older -> "D MMM HH:MM". Used by the
+// topbar pill (with the "updated " prefix above) and the Inverter Status
+// "Last reading" row (without it, via fmtTimeShort).
+function fmtTimeShort(iso){
+  if(!iso) return '–';
   const d = new Date(iso);
-  return 'updated ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  if(Number.isNaN(d.getTime())) return '–';
+  const time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  const dayKey = localDayKey(d);
+  const todayKey = localDayKey(new Date());
+  if(dayKey === todayKey) return time;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if(dayKey === localDayKey(yesterday)) return `yesterday ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+  return `${d.toLocaleDateString([], {day:'numeric', month:'short'})} ${d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+}
+
+function localDayKey(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function fmtClock(iso){
@@ -59,4 +84,4 @@ function fmtCO2(kg){
     : [Math.round(n).toString(), 'kg'];
 }
 
-export { fmt, fmtTime, fmtClock, fmtDuration, fmtEnergy, fmtMoney, fmtCO2 };
+export { fmt, fmtTime, fmtTimeShort, localDayKey, fmtClock, fmtDuration, fmtEnergy, fmtMoney, fmtCO2 };

@@ -5,6 +5,9 @@
 // guarded -- missing sources keep their placeholder.
 
 import { fetchPeakProduction, fetchGenerationSummary } from './api.js';
+import { fmtClock, localDayKey } from './format.js';
+import { state } from './state.js';
+import { getNextSunrise } from './sun.js';
 
 const $ = id => document.getElementById(id);
 
@@ -67,16 +70,29 @@ function splitPeak(s){
 }
 
 function syncNumbers(){
+  const night = state.nightMode;
   const solar = text('statSolar');
   const today = text('statToday');
-  if(solar && solar !== '–') setText('glanceNow', solar);
+  // Overnight there is no live output: never mirror a stale afternoon
+  // wattage as "Now". The gauge already parks on '–' the same way.
+  if(night){
+    setText('glanceNow', '–');
+  }else if(solar && solar !== '–'){
+    setText('glanceNow', solar);
+  }
   if(today && today !== '–') setText('glanceToday', today);
 
-  // Collapsed-strip summary keeps the key numbers glanceable.
+  // Collapsed-strip summary keeps the key numbers glanceable. Overnight it
+  // names the state instead of implying a live wattage.
   const sum = $('statsToggleSummary');
   if(sum){
-    sum.textContent = (solar && solar !== '–' && today && today !== '–')
-      ? `${solar} W · ${today} kWh today` : '';
+    if(!night && solar && solar !== '–' && today && today !== '–'){
+      sum.textContent = `${solar} W · ${today} kWh today`;
+    }else if(night && today && today !== '–'){
+      sum.textContent = `asleep · ${today} kWh today`;
+    }else{
+      sum.textContent = '';
+    }
   }
 
   // Peak: pinned to today. Live readings fold in instantly; the server
@@ -112,14 +128,22 @@ function syncNumbers(){
   // Live % of installed kWp (text only; gauge dial stays on rated W).
   // Hidden entirely when capacity unset. Short `40% · 3.1 kWp` form keeps
   // the 3-up glance grid overflow-free on 375px phones (full precision in
-  // the tooltip).
+  // the tooltip). Overnight the line names the resume time instead.
   const nowSub = $('glanceNowSub');
   if(nowSub){
-    if(plantKwp && nowW !== null && nowW > 0){
+    if(night){
+      const rise = getNextSunrise();
+      const clock = rise && !Number.isNaN(rise.getTime())
+        ? fmtClock(rise.toISOString()) : null;
+      nowSub.textContent = clock ? `resumes ${clock}` : 'inverter asleep';
+      nowSub.title = clock
+        ? `Inverter asleep overnight — resumes around ${clock}.`
+        : 'Inverter asleep overnight.';
+    }else if(plantKwp && nowW !== null && nowW > 0){
       const pctCap = (nowW / (plantKwp * 1000)) * 100;
       nowSub.textContent = `${Math.round(pctCap)}% · ${Number(plantKwp).toFixed(1)} kWp`;
       nowSub.title = `Live output as % of installed DC capacity (${plantKwp} kWp). Gauge dial stays on inverter rating.`;
-    }else if(!plantKwp){
+    }else{
       if(nowSub.textContent !== 'solar input') nowSub.textContent = 'solar input';
       nowSub.removeAttribute('title');
     }
@@ -127,31 +151,68 @@ function syncNumbers(){
 }
 
 function syncState(){
-  const mode = text('modeText').toLowerCase();
+  const night = state.nightMode;
   const conn = text('connText').toLowerCase();
   const dot = $('glanceDot');
   const label = $('glanceState');
   const sub = $('glanceSub');
   if(!label) return;
-  let state = 'Live';
+  // The badge stays a short state — raw transport errors ("read error —
+  // retrying") never leak into it; they already surface in the topbar pill.
+  let badge = 'Live';
   let cls = 'dot live';
-  if(mode.includes('night')){
-    state = 'Night · resting';
+  if(night){
+    badge = 'Night · resting';
     cls = 'dot night';
-  }else if(conn.includes('connect') || conn.includes('sync') || conn.includes('retry') || conn.includes('offline')){
-    state = conn || 'Connecting';
+  }else if(conn.includes('offline')){
+    badge = 'Offline';
+    cls = 'dot down';
+  }else if(conn.includes('connect') || conn.includes('sync') || conn.includes('retry') || conn.includes('read error')){
+    badge = 'Retrying…';
     cls = 'dot down';
   }
-  label.textContent = state;
+  label.textContent = badge;
   if(dot) dot.className = cls;
   const tdot = $('statsToggleDot');
   if(tdot) tdot.className = cls;
-  if(sub) sub.textContent = mode.includes('night') ? 'inverter asleep · resumes at sunrise' : 'live summary';
+  if(sub){
+    if(night){
+      const rise = getNextSunrise();
+      const clock = rise && !Number.isNaN(rise.getTime())
+        ? fmtClock(rise.toISOString()) : null;
+      sub.textContent = clock
+        ? `inverter asleep · resumes ${clock}` : 'inverter asleep · resumes at sunrise';
+    }else{
+      sub.textContent = 'live summary';
+    }
+  }
+  // "Today" keeps its meaning across sunset: still accumulating by day,
+  // a finished total overnight.
+  const todaySub = $('glanceTodaySub');
+  if(todaySub) todaySub.textContent = night ? 'final' : 'energy so far';
 }
 
 export function initGlance(){
   syncNumbers();
   syncState();
+  let lastDateKey = localDayKey(new Date());
+  // Midnight rollover while the page stays open: yesterday's peak must not
+  // survive as "best today", and yesterday's final must not linger as
+  // today's numbers before the first reading of the new day.
+  const onDateChange = () => {
+    todayPeakW = null;
+    for(const id of ['glanceToday', 'glancePeak', 'statToday']){
+      const node = $(id);
+      if(node) node.textContent = '–';
+    }
+    const unit = $('glancePeakUnit');
+    if(unit) unit.textContent = 'W';
+    lastPeakFetch = 0;
+    refreshTodayPeak();
+    syncNumbers();
+    syncState();
+  };
+  window.addEventListener('datechange', onDateChange);
   // Live stats update via textContent swaps (no events), so observe them.
   const watch = ['statSolar', 'statToday', 'insightPeakValue', 'modeText', 'connText'];
   const obs = new MutationObserver(() => { syncNumbers(); syncState(); });
@@ -162,6 +223,12 @@ export function initGlance(){
   // Fallback tick in case a renderer replaces nodes wholesale; the today
   // peak + capacity refresh on a slow tick alongside it.
   setInterval(() => {
+    const key = localDayKey(new Date());
+    if(key !== lastDateKey){
+      lastDateKey = key;
+      onDateChange();
+      return;
+    }
     syncNumbers();
     syncState();
     if(Date.now() - lastPeakFetch > PEAK_REFRESH_MS) refreshTodayPeak();

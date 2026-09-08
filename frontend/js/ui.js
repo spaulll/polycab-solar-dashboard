@@ -2,7 +2,7 @@
 // Pure DOM layer: no fetching, no sockets, no charts. Numeric values run
 // through motion.js tickers; units render as static chips beside them.
 
-import { fmtTime } from './format.js';
+import { fmtTime, fmtTimeShort } from './format.js';
 import { setNightMode } from './state.js';
 import { swapText, tweenNumber } from './motion.js';
 
@@ -30,7 +30,7 @@ function setConn(state){ // 'live' | 'syncing'
     degradedSince = null;
     if(escalateTimer){ clearInterval(escalateTimer); escalateTimer = null; }
     connDot.className = 'dot live';
-    connText.textContent = 'live';
+    connText.textContent = 'Live';
     connPill.classList.remove('degraded');
     return;
   }
@@ -40,13 +40,13 @@ function setConn(state){ // 'live' | 'syncing'
     escalateTimer = setInterval(tickDegraded, 10000);
   }
   connDot.className = 'dot down';
-  connText.textContent = 'syncing…';
+  connText.textContent = 'Syncing…';
   connPill.classList.add('degraded');
 }
 
 function tickDegraded(){
   const mins = Math.floor((Date.now() - degradedSince) / 60000);
-  if(mins >= 1) connText.textContent = `offline · ${mins}m`;
+  if(mins >= 1) connText.textContent = `Offline · ${mins}m`;
 }
 
 // Transient read errors keep the green dot but explain the stall.
@@ -57,7 +57,7 @@ function setConnText(text){
 function setMode(night){
   setNightMode(night);
   modeDot.className = 'dot ' + (night ? 'night' : 'live');
-  swapText(modeText, night ? 'night mode' : 'day mode');
+  swapText(modeText, night ? 'Night' : 'Day');
   nightBanner.classList.toggle('show', night);
 }
 
@@ -76,6 +76,16 @@ function updateStatCards(d){
   tweenNumber(el('statTemp'), d.Temperature, 0);
   tweenNumber(el('statToday'), d.E_Today, 2);
   tweenNumber(el('statLifetime'), d.E_Total, 1);
+}
+
+// Overnight the inverter holds no live output: park the live-only tiles on
+// '–' so a stale afternoon wattage can't read as "Now". Energy totals
+// (today/lifetime finals) are kept — they remain the day's honest result.
+function clearLiveReadings(){
+  for(const id of ['statSolar', 'statGridV', 'statGridA', 'statInvPower', 'statTemp']){
+    const node = el(id);
+    if(node) tweenNumber(node, undefined, 0);
+  }
 }
 
 function dimStatCards(dim){
@@ -241,7 +251,7 @@ function setInverterStatus(status, info = {}){
   // Health dot reuses the shared pill dot states (live/down/night).
   invDot.className = 'dot ' + ({ online: 'live', offline: 'down', night: 'night' }[status] || '');
 
-  if(info.last_reading_at != null) swapText(invLastReading, fmtTime(info.last_reading_at));
+  if(info.last_reading_at != null) swapText(invLastReading, fmtTimeShort(info.last_reading_at));
 
   if(status === 'offline' && info.offline_since){
     const parsed = Date.parse(info.offline_since);
@@ -263,6 +273,7 @@ export {
   setNightText,
   NIGHT_TEXT_DEFAULT,
   updateStatCards,
+  clearLiveReadings,
   dimStatCards,
   setLastUpdated,
   setInverterStatus,

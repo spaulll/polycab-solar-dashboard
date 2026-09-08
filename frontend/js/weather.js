@@ -95,9 +95,19 @@ function renderTomorrowPopup(t){
   const typ = Number(t.typical_kwh).toFixed(1);
   const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
     ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
+  // Short "Tue 9 Sep" form — the popup row wraps, but the ISO date is
+  // technical clutter; the full date stays in the tooltip.
+  let dayName = '';
+  if(t.date){
+    const d = new Date(t.date + 'T00:00:00');
+    if(!Number.isNaN(d.getTime()))
+      dayName = d.toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short'}) + ' ';
+  }
   node.hidden = false;
-  node.textContent = `Tomorrow ≈ ${exp} kWh (typical ${typ}${cloud})`;
-  node.title = `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`;
+  node.textContent = dayName
+    ? `Tomorrow (${dayName.trim()}) ≈ ${exp} kWh (typical ${typ}${cloud})`
+    : `Tomorrow ≈ ${exp} kWh (typical ${typ}${cloud})`;
+  node.title = `Expected ${t.date || 'tomorrow'} from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`;
 }
 
 async function loadTomorrowIntoPopup(){

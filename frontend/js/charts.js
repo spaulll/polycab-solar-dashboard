@@ -19,9 +19,9 @@
 
 import { GAP_THRESHOLD_MS, MAX_POINTS, TODAY_MAX_POINTS, WEATHER_REFRESH_MS } from './config.js';
 import { state } from './state.js';
-import { fmt } from './format.js';
+import { fmt, fmtClock } from './format.js';
 import { fetchTodayProjection, fetchTomorrowForecast } from './api.js';
-import { getDayWindow } from './sun.js';
+import { getDayWindow, getNextSunrise } from './sun.js';
 import { prefersReducedMotion } from './motion.js';
 
 const el = id => document.getElementById(id);
@@ -420,7 +420,7 @@ function renderToday(readings, sunInfo){
     setInteraction('realtime');
     setTooltipCallbacks({});
     const clock = sunrise.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    setChartMsg(`Night — today's solar session begins at ${clock}`);
+    setChartMsg(`Paused overnight — resumes today at ${clock}`);
     animatedUpdate(powerChart);
     return;
   }
@@ -589,13 +589,15 @@ function updatePaceTag(eTodayKwh){
 
   // No history yet: state today's known total (or wait honestly).
   if(typical === null){
-    if(kwh === null) return show('Today – · typical – kWh', 'Collecting history — averages appear after a few days.', 0);
+    if(kwh === null) return show('Waiting for today\u2019s first reading…', 'Collecting history — averages appear after a few days.', 0);
     return show(`Today ${fmt(kwh, 1)} kWh`, 'Today’s yield so far. The typical-day comparison appears after a few days of history.', 0);
   }
   const typ = fmt(typical, 1);
 
   // Night: the pace slot carries tomorrow's expectation instead of the
-  // finished day (also shown in the weather popup on demand).
+  // finished day (also shown in the weather popup on demand). The forecast
+  // date rides along so "Tomorrow" can't be mistaken for tonight after
+  // midnight.
   if(state.nightMode){
     const t = tomorrowForPace;
     const tok = t && t.expected_kwh !== null && t.expected_kwh !== undefined
@@ -606,8 +608,11 @@ function updatePaceTag(eTodayKwh){
       const ttyp = fmt(Number(t.typical_kwh), 1);
       const cloud = (t.cloud_pct !== null && t.cloud_pct !== undefined)
         ? `, cloudy ${Math.round(t.cloud_pct)}%` : '';
+      // Visible line keeps the short established shape (the pace tag is a
+      // nowrap+ellipsis subtitle — a date here would truncate the numbers on
+      // 375px phones); the date rides in the tooltip instead.
       return show(`Tomorrow ≈ ${exp} kWh (typical ${ttyp}${cloud})`,
-        `Expected tomorrow from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`,
+        `Expected ${t.date || 'tomorrow'} from daylight-cloud derate of your typical day. Provider: ${t.provider || '–'}. Estimated, not metered.`,
         typical && kwh !== null ? kwh / typical : 0);
     }
     if(!tomorrowPaceFetching && Date.now() - tomorrowForPaceAt > TOMORROW_PACE_TTL_MS){
@@ -620,10 +625,21 @@ function updatePaceTag(eTodayKwh){
         if(state.nightMode) updatePaceTag();
       });
     }
-    if(kwh === null) return show(`Night · typical ${typ} kWh`, 'Inverter asleep. Typical yield for an average day.', 0);
-    return show(`Night · today ${fmt(kwh, 1)} · typical ${typ} kWh`,
-      'How today finished against your long-term average day. Resumes at sunrise.',
-      typical ? kwh / typical : 0);
+    // Evening (same-day final still known) vs after-midnight (new day has no
+    // production yet): name the state so "today" never means yesterday.
+    if(kwh !== null){
+      return show(`Night · finished ${fmt(kwh, 1)} · typical ${typ} kWh`,
+        'How today finished against your long-term average day. Resumes at sunrise.',
+        typical ? kwh / typical : 0);
+    }
+    const rise = getNextSunrise();
+    const clock = rise && !Number.isNaN(rise.getTime())
+      ? fmtClock(rise.toISOString()) : null;
+    return show(
+      clock ? `Asleep · resumes ${clock} · typical ${typ} kWh` : `Night · typical ${typ} kWh`,
+      clock ? `Inverter asleep. Next session starts around ${clock}; typical yield for an average day is ${typ} kWh.`
+            : 'Inverter asleep. Typical yield for an average day.',
+      0);
   }
 
   // Pace needs today's solar window. The chart only provides it in the
@@ -631,10 +647,15 @@ function updatePaceTag(eTodayKwh){
   // (same server source of truth, refreshed on its own schedule).
   const win = (todayWindow?.sunrise && todayWindow?.sunset)
     ? todayWindow : getDayWindow();
-  if(!win.sunrise || !win.sunset || kwh === null){
+  if(!win.sunrise || !win.sunset){
     return show(`Today ${kwh === null ? '–' : fmt(kwh, 1)} · typical ${typ} kWh`,
       'Today’s yield against your long-term average day.',
       typical && kwh !== null ? kwh / typical : 0);
+  }
+  if(kwh === null){
+    return show(`No production yet today · typical ${typ} kWh`,
+      'Awaiting today’s first reading — pacing starts after ~30 minutes of production.',
+      0);
   }
 
   const sunriseMs = new Date(win.sunrise).getTime();

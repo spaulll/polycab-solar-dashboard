@@ -9,13 +9,13 @@ import { fetchHistory, fetchSolarSessions, fetchSolarProfile, fetchPeakProductio
 import { connectWebSocket } from './ws.js';
 import {
   setMode, setNightText, setConn, setConnText, NIGHT_TEXT_DEFAULT,
-  updateStatCards, dimStatCards, setLastUpdated, setInverterStatus,
+  updateStatCards, clearLiveReadings, dimStatCards, setLastUpdated, setInverterStatus,
   renderGenerationSummary,
 } from './ui.js';
 import { renderHistory, renderSessions, renderProfile, appendLivePoint, renderDailySummary, setDailyMonth, dailyMonthOptions, renderCumulative, setCumulativeRange, renderMonthly, setMonthlyRange, loadTodayProjection, updatePaceTag } from './charts.js';
 import { computeInsights, renderPeakInsight } from './insights.js';
 import { loadImpact } from './impact.js';
-import { loadTemperature, updateCurrentTemp, initTemperature } from './temperature.js';
+import { loadTemperature, updateCurrentTemp, clearCurrentTemp, initTemperature } from './temperature.js';
 import { loadWeatherImpact, initWeatherImpact } from './correlation.js';
 import { updateSunInfo, refreshSunInfo, startSunTicker } from './sun.js';
 import { initYieldCard, loadYieldStats } from './yield.js';
@@ -93,6 +93,40 @@ function startDayPolling(){
 function stopDayPolling(){
   dayTimers.forEach(clearInterval);
   dayTimers.length = 0;
+}
+
+// ---------- Midnight rollover watcher (always on) ----------
+// Day-mode intervals stop overnight, so without this the date-bound copy
+// (Today/Yesterday/Week/Month/Year, "best today", powercuts "Today", the
+// pace line) would still show yesterday after 12 AM. Fires once per local
+// date change regardless of nightMode and reloads every date-dependent
+// panel; glance.js also listens for 'datechange' to reset its today peak.
+let lastLocalDateKey = localDateKey(new Date());
+
+function localDateKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function startMidnightWatcher(){
+  setInterval(() => {
+    const key = localDateKey(new Date());
+    if(key === lastLocalDateKey) return;
+    lastLocalDateKey = key;
+    window.dispatchEvent(new CustomEvent('datechange', { detail: key }));
+    refreshSunInfo();
+    loadHistory();
+    loadDailySummary();
+    loadGenerationSummary();
+    loadImpact();
+    loadYieldStats();
+    loadMonthlyEnergy();
+    loadTemperature();
+    loadWeatherImpact();
+    loadDbHealth();
+    loadPowercutCount();
+    loadTodayProjection();
+    updatePaceTag();
+  }, 30000);
 }
 
 // ---------- Data loading ----------
@@ -219,8 +253,15 @@ async function loadInitialStatus(){
     // Dimming follows the mode flag, not data presence: at night the
     // inverter is asleep so last_reading is null, yet the gauge must still
     // park on sleeping (and the stats dim) instead of keeping boot state.
+    // Live-only tiles are parked on '–' so boot never shows a stale day
+    // value as current output.
     dimStatCards(json.night_mode);
     dimGauge(json.night_mode);
+    if(json.night_mode){
+      clearLiveReadings();
+      clearCurrentTemp();
+      setNightText(NIGHT_TEXT_DEFAULT);
+    }
     if(json.sun){
       updateSunInfo(json.sun);
     }
@@ -245,9 +286,15 @@ function handleWSMessage(msg){
       updateCurrentTemp(msg.last_reading.Temperature);
     }
     // Same as loadInitialStatus: dim on the mode flag even when the
-    // payload carries no reading (fresh server boot at night).
+    // payload carries no reading (fresh server boot at night). Overnight
+    // the live-only tiles park on '–' rather than a stale day value.
     dimStatCards(msg.night_mode);
     dimGauge(msg.night_mode);
+    if(msg.night_mode){
+      clearLiveReadings();
+      if(!msg.last_reading) clearCurrentTemp();
+      setNightText(NIGHT_TEXT_DEFAULT);
+    }
     if(msg.sun){
       updateSunInfo(msg.sun);
     }
@@ -290,11 +337,16 @@ function handleWSMessage(msg){
     setMode(true);
     dimStatCards(true);
     dimGauge(true);
-    setNightText(`Inverter is asleep. Resuming in ~${(msg.seconds_until_sunrise/3600).toFixed(1)}h.`);
+    clearLiveReadings();
+    clearCurrentTemp();
+    // The 1s sun ticker owns the live "resumes HH:MM (HH:MM:SS left)" copy;
+    // seeding the generic line here avoids flashing a frozen "~Xh" figure
+    // computed once per night by the server.
+    setNightText(NIGHT_TEXT_DEFAULT);
     refreshSunInfo();
     setInverterStatus('night');
     stopDayPolling();
-    updatePaceTag(); // no pace statement at night
+    updatePaceTag(); // overnight pace statement, not a daytime projection
   }
   else if(msg.type === 'wake_up'){
     setMode(false);
@@ -319,7 +371,7 @@ function handleWSMessage(msg){
   }
   else if(msg.type === 'error'){
     // Backend already retries; just reflect it isn't fresh data
-    setConnText('read error — retrying');
+    setConnText('Retrying…');
     noteError(msg);
     // The server decides the health status: below the powercut error
     // threshold it stays as-is (usually online) and only the Last Error
@@ -517,6 +569,9 @@ function refreshLive(){
   // the mode, so only start here when it's day. Sun info keeps its own fixed
   // schedule regardless of mode.
   if(!state.nightMode) startDayPolling();
+  // Date-bound panels must still roll over at midnight while night polling
+  // is stopped — the watcher runs in both modes (see startMidnightWatcher).
+  startMidnightWatcher();
   // Local 1-second countdown tick (no network call), plus a periodic
   // full refresh from the server to stay accurate over long sessions.
   startSunTicker();

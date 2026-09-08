@@ -39,6 +39,13 @@ function updateCurrentTemp(value){
   swapText(el('tempNow'), tempText(currentTempC));
 }
 
+// Overnight there is no live sample: park on '–' instead of holding the
+// afternoon's last value as if it were current.
+function clearCurrentTemp(){
+  currentTempC = null;
+  swapText(el('tempNow'), tempText(null));
+}
+
 function renderStats(payload){
   const r = payload?.records ?? {};
 
@@ -127,4 +134,4 @@ function initTemperature(){
     });
 }
 
-export { loadTemperature, updateCurrentTemp, initTemperature };
+export { loadTemperature, updateCurrentTemp, clearCurrentTemp, initTemperature };
